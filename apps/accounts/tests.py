@@ -112,3 +112,38 @@ class AuthAPITest(APITestCase):
         }
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_returns_first_and_last_name(self):
+        """Testa que o login expõe first_name e last_name no objecto user"""
+        user = CustomUser.objects.create_user(
+            username="named@example.com",
+            email="named@example.com",
+            password="namedpass123",
+            user_type="learner",
+            first_name="João",
+            last_name="Silva",
+        )
+        data = {"email": "named@example.com", "password": "namedpass123"}
+        response = self.client.post(self.login_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("first_name", response.data["user"])
+        self.assertIn("last_name", response.data["user"])
+        self.assertEqual(response.data["user"]["first_name"], "João")
+        self.assertEqual(response.data["user"]["last_name"], "Silva")
+
+    def test_token_refresh_success(self):
+        """Testa renovação de access token com refresh token válido"""
+        login_data = {"email": "existing@example.com", "password": "existingpass123"}
+        login_response = self.client.post(self.login_url, login_data)
+        refresh_token = login_response.data["refresh_token"]
+
+        refresh_url = reverse("token_refresh")
+        response = self.client.post(refresh_url, {"refresh": refresh_token})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+
+    def test_token_refresh_with_invalid_token_returns_401(self):
+        """Testa que refresh token inválido retorna 401"""
+        refresh_url = reverse("token_refresh")
+        response = self.client.post(refresh_url, {"refresh": "token-invalido"})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
