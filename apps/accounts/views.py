@@ -195,19 +195,29 @@ class LearnerCoursesView(APIView):
     @extend_schema(summary="Get Enrolled Courses", tags=["Dashboard"])
     def get(self, request):
         user = request.user
-        # Get contents where user submitted a quiz
-        content_ids = QuizSubmission.objects.filter(user=user).values_list('quiz__content', flat=True).distinct()
-        contents = Content.objects.filter(id__in=content_ids)
-        
+
+        submissions = (
+            QuizSubmission.objects
+            .filter(user=user)
+            .select_related("quiz__content")
+            .order_by("-submitted_at")
+        )
+
+        seen = set()
         data = []
-        for content in contents:
+        for submission in submissions:
+            content = submission.quiz.content
+            if content.id in seen:
+                continue
+            seen.add(content.id)
             data.append({
                 "id": str(content.id),
                 "title": content.title,
-                "progress": 100, # Simplified
-                "lastAccessed": "2024-03-10", # Mock
-                "thumbnail": "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=500" # Mock
+                "progress": 100,
+                "lastAccessed": submission.submitted_at.strftime("%Y-%m-%d"),
+                "thumbnail": content.thumbnail or "https://placehold.co/500x300?text=Kombinu",
             })
+
         return Response(data)
 
 class CreatorStatsView(APIView):
