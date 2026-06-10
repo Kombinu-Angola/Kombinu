@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Sum
 from .models import CustomUser
 
 
@@ -32,7 +33,23 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    nome = serializers.SerializerMethodField()
+    pontos = serializers.SerializerMethodField()
+    nivel = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomUser
-        fields = ("id", "email", "user_type", "first_name", "last_name")
-        read_only_fields = ("id", "email", "user_type", "first_name", "last_name")
+        fields = ("id", "email", "user_type", "first_name", "last_name", "nome", "pontos", "nivel")
+        read_only_fields = ("id", "email", "user_type", "first_name", "last_name", "nome", "pontos", "nivel")
+
+    def get_nome(self, obj):
+        nome = f"{obj.first_name} {obj.last_name}".strip()
+        return nome or obj.email
+
+    def get_pontos(self, obj):
+        from apps.quizzes.models import QuizSubmission
+        result = QuizSubmission.objects.filter(user=obj).aggregate(total=Sum("score"))
+        return result["total"] or 0
+
+    def get_nivel(self, obj):
+        return (self.get_pontos(obj) // 100) + 1

@@ -180,7 +180,7 @@ class LearnerStatsView(APIView):
         courses_completed = submissions.values('quiz__content').distinct().count()
         total_points = submissions.aggregate(Sum('score'))['score__sum'] or 0
         quizzes_taken = submissions.count()
-        current_level = (total_points // 1000) + 1
+        current_level = (total_points // 100) + 1
         
         return Response({
             "coursesCompleted": courses_completed,
