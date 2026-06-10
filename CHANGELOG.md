@@ -5,6 +5,23 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.6.0] - Estabilização para Demo AngoTic 2026 (10 de Junho 2026)
+
+### Corrigido
+
+- **Sistema de pontos partido:** `QuizSubmission.score` passa a guardar XP (respostas correctas × 10). Threshold de nível ajustado de 1000 para 100 XP — utilizador sobe ao nível 2 após 1 quiz perfeito de 10 perguntas, tornando a progressão visível na demo.
+- **Perfil sem pontos e nível:** `UserProfileSerializer` expõe agora `nome` (first + last name com fallback para email), `pontos` (total XP) e `nivel` calculados em tempo real — frontend obtém estes dados directamente no login sem pedidos adicionais.
+- **OpenTDB rate limit em demo:** Serviço de geração de quiz implementa retry automático (até 2 tentativas, 2s de espera) quando `response_code=5`. Retorna HTTP 503 com mensagem em PT após esgotar tentativas, em vez de 500 genérico.
+- **Backend não arranca sem DATABASE_URL:** `settings.py` usa `sqlite:///db.sqlite3` como fallback quando `DATABASE_URL` não está definida no ambiente.
+
+### Testes
+
+- Adicionados 5 testes para `LearnerStatsView`: nível 1 sem submissões, score como XP, nível 2 após 100 XP, nível 1 abaixo de 100 XP, 401 sem autenticação.
+- Adicionados 2 testes de perfil no login: `nome` composto e fallback para email.
+- Adicionado teste de rate limit OpenTDB: verifica que `OpenTDBRateLimitError` resulta em 503 com mensagem descritiva.
+
+---
+
 ## [2.5.0] - Sprint AngoTic 2026 — Semana 2 (Junho 2026)
 
 ### Adicionado
