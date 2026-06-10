@@ -143,9 +143,9 @@ pytest --cov=apps
 
 - **accounts**: 20 testes (autenticação, perfil com XP/nível, dashboard stats, cursos do aprendiz, token refresh)
 - **contents**: 11 testes (CRUD e permissões)
-- **quizzes**: 17 testes (criação, submissão, score XP, rate limit OpenTDB)
+- **quizzes**: 18 testes (criação, submissão, score XP, rate limit OpenTDB, fallback PT→EN)
 - **rankings**: 11 testes (ordenação, posição, agregação, isolamento entre utilizadores)
-- **Total**: 65 testes ✅
+- **Total**: 66 testes ✅
 
 ## Estrutura do Projeto
 
