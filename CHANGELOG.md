@@ -5,13 +5,65 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.6.0] - Estabilização para Demo AngoTic 2026 (10 de Junho 2026)
+
+### Corrigido
+
+- **Sistema de pontos partido:** `QuizSubmission.score` passa a guardar XP (respostas correctas × 10). Threshold de nível ajustado de 1000 para 100 XP — utilizador sobe ao nível 2 após 1 quiz perfeito de 10 perguntas, tornando a progressão visível na demo.
+- **Perfil sem pontos e nível:** `UserProfileSerializer` expõe agora `nome` (first + last name com fallback para email), `pontos` (total XP) e `nivel` calculados em tempo real — frontend obtém estes dados directamente no login sem pedidos adicionais.
+- **OpenTDB rate limit em demo:** Serviço de geração de quiz implementa retry automático (até 2 tentativas, 2s de espera) quando `response_code=5`. Retorna HTTP 503 com mensagem em PT após esgotar tentativas, em vez de 500 genérico.
+- **Backend não arranca sem DATABASE_URL:** `settings.py` usa `sqlite:///db.sqlite3` como fallback quando `DATABASE_URL` não está definida no ambiente.
+
+### Testes
+
+- Adicionados 5 testes para `LearnerStatsView`: nível 1 sem submissões, score como XP, nível 2 após 100 XP, nível 1 abaixo de 100 XP, 401 sem autenticação.
+- Adicionados 2 testes de perfil no login: `nome` composto e fallback para email.
+- Adicionado teste de rate limit OpenTDB: verifica que `OpenTDBRateLimitError` resulta em 503 com mensagem descritiva.
+
+---
+
+## [2.5.0] - Sprint AngoTic 2026 — Semana 2 (Junho 2026)
+
+### Adicionado
+
+- Endpoint `POST /api/auth/token/refresh/` para renovação de access tokens JWT sem forçar novo login, eliminando sessões a expirar após 60 minutos em produção.
+
+### Corrigido
+
+- `UserProfileSerializer` actualizado para expor `first_name` e `last_name` na resposta do login — dashboard frontend passa a exibir o nome correcto do utilizador.
+- `GlobalRankingView` refactorizado de N+1 queries (até 101 por request) para uma única query SQL com JOIN via `.values("user_id", "user__email")`.
+- `LearnerCoursesView` substituiu dados hardcoded (`lastAccessed: "2024-03-10"` e thumbnail Unsplash) por dados reais: data da última `QuizSubmission` e `thumbnail` do próprio `Content`.
+
+### Testes
+
+- Adicionados 3 testes de autenticação: refresh com token válido, refresh inválido, e login com verificação de `first_name`/`last_name`.
+- Adicionados 8 testes para `LearnerCoursesView`: 401, lista vazia, data real, thumbnail real, fallback de thumbnail, deduplicação e isolamento entre utilizadores.
+
+---
+
+## [2.4.0] - Sprint AngoTic 2026 (Junho 2026)
+
+### Corrigido
+
+- Mapeamento de categorias da Open Trivia DB substituído por constante estática em `quizzes/services.py`, eliminando chamada HTTP extra a cada geração de quiz e prevenindo rate limiting em gerações consecutivas.
+- Removidas funções auxiliares `get_opentdb_categories()` e `map_local_category_to_opentdb()` que causavam dupla requisição à API externa.
+- Corrigidos typos nos comentários e mensagens de log do serviço de quizzes.
+
+### Adicionado
+
+- Testes completos para `GlobalRankingView` em `rankings/tests.py`, cobrindo autenticação, estrutura da resposta, ordenação por pontuação, cálculo de posição e agregação de múltiplas submissões.
+
+---
+
 ## [2.3.0] - Correções Quizzes do MVP (Março 2026)
 
 ### Adicionado
+
 - Novo campo genérico `type` na modelagem do `Content` para correta diferenciação tipológica nos formulários Frontend de Vídeos vs Textos vs Quizzes.
 - Novo View Customizado `QuizManualCreationView` para suportar inserção de perguntas, opções e validação de pontos provindas da plataforma UI.
 
 ### Corrigido
+
 - Sincronização dos Serializadores (`OptionSerializer`, `QuestionSerializer` e `QuizDetailSerializer`) de modo a exporem os campos `id`, `text` e `timeLimit` padronizados, prevenindo bugs de interface do aluno.
 - Ajustes de Payload na View `QuizSubmissionView` para retornar os campos `totalPoints`, `xp earned` equivalentes à tipagem do front-end original.
 - Alteração no `lookup_field` de `pk` para `id` no `QuizDetailView` evitando a sobreposição 500 ao extrair detalhes por UUID.

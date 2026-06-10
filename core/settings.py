@@ -117,7 +117,7 @@ AUTH_USER_MODEL = "accounts.CustomUser"
 # }
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL"),
+        default=os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR}/db.sqlite3"),
         conn_max_age=600,
     )
 }
@@ -197,7 +197,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Kombinu API",
     "DESCRIPTION": "API da plataforma educacional Kombinu",
-    "VERSION": "2.1.0",
+    "VERSION": "2.6.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "AUTHENTICATION_WHITELIST": [

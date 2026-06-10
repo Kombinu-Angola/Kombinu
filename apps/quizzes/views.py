@@ -11,7 +11,7 @@ from .serializers import (
 )
 from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.contents.models import Content
-from .services import generate_quiz_from_opentdb
+from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
 
 
 class QuizDetailView(generics.RetrieveAPIView):
@@ -47,7 +47,13 @@ class QuizGenerationView(APIView):
             )
 
         # Chama o serviço para gerar o quiz
-        quiz = generate_quiz_from_opentdb(content, difficulty, number_of_questions)
+        try:
+            quiz = generate_quiz_from_opentdb(content, difficulty, number_of_questions)
+        except OpenTDBRateLimitError:
+            return Response(
+                {"error": "A API de perguntas está temporariamente sobrecarregada. Aguarda alguns segundos e tenta novamente."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         if quiz:
             return Response(
@@ -182,18 +188,20 @@ class QuizSubmissionView(APIView):
                     }
                 )
 
-            # Atualiza o score
-            submission.score = correct_count
+            # Score guardado em XP (respostas correctas × 10) para suportar
+            # o sistema de níveis — level = (total_xp // 100) + 1
+            xp_earned = correct_count * 10
+            submission.score = xp_earned
             submission.save()
 
         total_questions = quiz.questions.count()
         return Response(
             {
-                "score": correct_count,
+                "score": xp_earned,
                 "totalPoints": total_questions,
                 "correctAnswers": correct_count,
                 "totalQuestions": total_questions,
-                "xp earned": correct_count * 10,
+                "xp earned": xp_earned,
                 "details": details,
             },
             status=status.HTTP_200_OK,
