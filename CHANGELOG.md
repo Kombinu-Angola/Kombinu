@@ -5,6 +5,22 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.7.0] - Geração de Quiz OpenTDB (10 de Junho 2026)
+
+### Corrigido
+
+- **Encoding incompatível com html.unescape:** Removido `"encode": "url3986"` dos parâmetros da OpenTDB. O encoding padrão da API devolve entidades HTML (`&amp;`, `&#039;`) que o `html.unescape()` já descodifica — com `url3986` o texto ficava com `%20` em vez de espaços.
+
+### Adicionado
+
+- **Perguntas em português com fallback para inglês:** Geração de quiz tenta primeiro `lang=pt`; se a OpenTDB devolver `response_code=1` (sem resultados) ou lista vazia, faz nova chamada sem `lang` para obter perguntas em inglês. Loop de retry extraído para `_call_opentdb(params)` reutilizável.
+
+### Testes
+
+- Adicionado `test_generate_quiz_fallback_to_english`: verifica que a primeira chamada à OpenTDB usa `lang=pt` e que o fallback para inglês é activado quando não há resultados em PT.
+
+---
+
 ## [2.6.0] - Estabilização para Demo AngoTic 2026 (10 de Junho 2026)
 
 ### Corrigido
