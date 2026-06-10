@@ -1,13 +1,13 @@
 # Kombinu - Plataforma Educacional
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/downloads/)
-[![Django](https://img.shields.io/badge/django-4.0+-green.svg)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/django-4.2+-green.svg)](https://www.djangoproject.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Sistema Django com API REST para gestão de conteúdos educacionais, quizzes interativos, rankings e gamificação.
 
-> 📝 **Novidades da v2.0**: Confira todas as mudanças no [CHANGELOG.md](CHANGELOG.md)
+> 📝 **Novidades da v2.6**: Confira todas as mudanças no [CHANGELOG.md](CHANGELOG.md)
 
 ## 🌐 Aplicação Online
 
@@ -141,41 +141,25 @@ pytest --cov=apps
 
 ### Cobertura de Testes
 
-- **accounts**: 9 testes (autenticação e perfis)
+- **accounts**: 20 testes (autenticação, perfil com XP/nível, dashboard stats, cursos do aprendiz, token refresh)
 - **contents**: 11 testes (CRUD e permissões)
-- **quizzes**: 16 testes (criação, submissão e validação)
-- **Total**: 36 testes ✅
+- **quizzes**: 17 testes (criação, submissão, score XP, rate limit OpenTDB)
+- **rankings**: 11 testes (ordenação, posição, agregação, isolamento entre utilizadores)
+- **Total**: 65 testes ✅
 
 ## Estrutura do Projeto
 
-```
-Kombinu/
-├── accounts/              # App de autenticação
-│   ├── migrations/
-│   ├── templates/accounts/
-│   ├── views.py          # Views web
-│   ├── api.py           # Views da API
-│   ├── urls.py          # URLs web
-│   ├── urls_api.py      # URLs da API
-│   ├── models.py
-│   └── forms.py
-├── courses/              # App de cursos
-│   ├── migrations/
-│   ├── views.py         # Views da API de cursos
-│   ├── urls.py          # URLs da API de cursos
-│   ├── models.py
-│   └── serializers.py
-├── dashboard/            # App do dashboard
-│   ├── templates/dashboard/
-│   ├── views.py
-│   └── urls.py
-├── templates/           # Templates globais
-│   └── base.html
-├── static/             # Arquivos estáticos
-├── media/              # Arquivos de mídia
+```text
+backend/
+├── apps/
+│   ├── accounts/          # Autenticação, perfis e dashboard
+│   ├── contents/          # Conteúdos educacionais
+│   ├── quizzes/           # Quizzes, submissões e scoring XP
+│   └── rankings/          # Rankings globais
+├── core/                  # settings.py, urls.py, wsgi.py
 ├── manage.py
 ├── requirements.txt
-└── README.md
+└── build.sh               # Script de deploy (Render)
 ```
 
 ## Rotas Principais
@@ -191,17 +175,22 @@ Kombinu/
 
 ### API REST
 
-| Rota | Descrição |
-|------|-----------|
-| `/api/auth/register/` | Registro de usuários |
-| `/api/auth/login/` | Login (obter token) |
-| `/api/auth/logout/` | Logout (invalidar token) |
-| `/api/auth/profile/` | Perfil do usuário |
-| `/api/courses/` | Listar cursos |
-| `/api/courses/{id}/` | Detalhes do curso |
-| `/api/courses/categories/` | Categorias de cursos |
-| `/api/courses/my-courses/` | Meus cursos |
-| `/api/courses/{id}/enroll/` | Inscrever-se em curso |
+| Rota | Método | Descrição |
+| --- | --- | --- |
+| `/api/auth/register/` | POST | Registo de utilizadores |
+| `/api/auth/login/` | POST | Login — devolve access + refresh JWT |
+| `/api/auth/token/refresh/` | POST | Renovar access token sem novo login |
+| `/api/auth/profile/` | GET | Perfil com nome, pontos (XP) e nível |
+| `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
+| `/api/dashboard/learner/courses/` | GET | Cursos frequentados |
+| `/api/dashboard/creator/stats/` | GET | Estatísticas do criador |
+| `/api/contents/` | GET/POST | Listar e criar conteúdos |
+| `/api/contents/{id}/` | GET/PUT/DELETE | Detalhes de um conteúdo |
+| `/api/quizzes/{id}/` | GET | Detalhes de um quiz |
+| `/api/quizzes/{content_id}/generate/` | POST | Gerar quiz via OpenTDB (creator) |
+| `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
+| `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
+| `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
 
 ### Documentação
 
