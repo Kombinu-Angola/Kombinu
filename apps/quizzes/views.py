@@ -182,18 +182,20 @@ class QuizSubmissionView(APIView):
                     }
                 )
 
-            # Atualiza o score
-            submission.score = correct_count
+            # Score guardado em XP (respostas correctas × 10) para suportar
+            # o sistema de níveis — level = (total_xp // 100) + 1
+            xp_earned = correct_count * 10
+            submission.score = xp_earned
             submission.save()
 
         total_questions = quiz.questions.count()
         return Response(
             {
-                "score": correct_count,
+                "score": xp_earned,
                 "totalPoints": total_questions,
                 "correctAnswers": correct_count,
                 "totalQuestions": total_questions,
-                "xp earned": correct_count * 10,
+                "xp earned": xp_earned,
                 "details": details,
             },
             status=status.HTTP_200_OK,

@@ -265,8 +265,11 @@ class QuizAPITest(APITestCase):
         }
         response = self.client.post(submit_url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["score"], 1)
+        # score agora é XP = respostas correctas × 10
+        self.assertEqual(response.data["score"], 10)
+        self.assertEqual(response.data["correctAnswers"], 1)
         self.assertEqual(response.data["totalQuestions"], 1)
+        self.assertEqual(response.data["xp earned"], 10)
 
     def test_submit_quiz_invalid_question(self):
         """Testa submeter resposta para questão que não é do quiz"""

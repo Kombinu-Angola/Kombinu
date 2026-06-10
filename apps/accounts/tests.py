@@ -115,9 +115,9 @@ class AuthAPITest(APITestCase):
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_login_returns_first_and_last_name(self):
-        """Testa que o login expõe first_name e last_name no objecto user"""
-        user = CustomUser.objects.create_user(
+    def test_login_returns_nome_pontos_nivel(self):
+        """Testa que o login expõe nome composto, pontos e nivel no objecto user"""
+        CustomUser.objects.create_user(
             username="named@example.com",
             email="named@example.com",
             password="namedpass123",
@@ -128,10 +128,16 @@ class AuthAPITest(APITestCase):
         data = {"email": "named@example.com", "password": "namedpass123"}
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("first_name", response.data["user"])
-        self.assertIn("last_name", response.data["user"])
-        self.assertEqual(response.data["user"]["first_name"], "João")
-        self.assertEqual(response.data["user"]["last_name"], "Silva")
+        user_data = response.data["user"]
+        self.assertEqual(user_data["nome"], "João Silva")
+        self.assertEqual(user_data["pontos"], 0)
+        self.assertEqual(user_data["nivel"], 1)
+
+    def test_login_nome_falls_back_to_email_when_no_name(self):
+        """Testa que nome usa email quando first_name e last_name estão vazios"""
+        data = {"email": "existing@example.com", "password": "existingpass123"}
+        response = self.client.post(self.login_url, data)
+        self.assertEqual(response.data["user"]["nome"], "existing@example.com")
 
     def test_token_refresh_success(self):
         """Testa renovação de access token com refresh token válido"""
@@ -149,6 +155,62 @@ class AuthAPITest(APITestCase):
         refresh_url = reverse("token_refresh")
         response = self.client.post(refresh_url, {"refresh": "token-invalido"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class LearnerStatsAPITest(APITestCase):
+    def setUp(self):
+        self.url = reverse("learner-stats")
+        self.creator = CustomUser.objects.create_user(
+            username="creator@stats.com",
+            email="creator@stats.com",
+            password="pass123",
+            user_type="creator",
+        )
+        self.learner = CustomUser.objects.create_user(
+            username="learner@stats.com",
+            email="learner@stats.com",
+            password="pass123",
+            user_type="learner",
+        )
+        content = Content.objects.create(
+            title="Curso Stats",
+            description="Desc",
+            creator=self.creator,
+            category="tecnologia",
+        )
+        self.quiz = Quiz.objects.create(title="Quiz Stats", content=content)
+
+    def test_unauthenticated_returns_401(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_stats_zero_when_no_submissions(self):
+        self.client.force_authenticate(user=self.learner)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["totalPoints"], 0)
+        self.assertEqual(response.data["currentLevel"], 1)
+        self.assertEqual(response.data["quizzesTaken"], 0)
+
+    def test_score_is_stored_as_xp(self):
+        """score = respostas correctas × 10 (XP), não o count bruto"""
+        QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=70)
+        self.client.force_authenticate(user=self.learner)
+        response = self.client.get(self.url)
+        self.assertEqual(response.data["totalPoints"], 70)
+
+    def test_level_2_after_100_xp(self):
+        """100 XP (1 quiz perfeito de 10 perguntas) → Level 2"""
+        QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=100)
+        self.client.force_authenticate(user=self.learner)
+        response = self.client.get(self.url)
+        self.assertEqual(response.data["currentLevel"], 2)
+
+    def test_level_stays_1_below_100_xp(self):
+        QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=90)
+        self.client.force_authenticate(user=self.learner)
+        response = self.client.get(self.url)
+        self.assertEqual(response.data["currentLevel"], 1)
 
 
 class LearnerCoursesAPITest(APITestCase):
