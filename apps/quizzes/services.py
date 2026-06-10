@@ -25,25 +25,14 @@ class OpenTDBRateLimitError(Exception):
     pass
 
 
-def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
+def _call_opentdb(params):
     """
-    Gera um quiz chamando a API da Open Trivia DB.
-    Faz retry automático (até OPENTDB_MAX_RETRIES vezes) quando a API
-    retorna rate limit (response_code 5).
+    Executa um pedido à OpenTDB com retry automático para rate limit.
+
+    Retorna a lista de perguntas em caso de sucesso (response_code 0 com results),
+    None quando não há resultados (response_code 1 ou lista vazia), ou em caso de
+    erro de rede. Levanta OpenTDBRateLimitError se esgotar as tentativas de rate limit.
     """
-    category_id = CATEGORY_MAPPING.get(content.category)
-    logger.debug(f"Mapeamento de categoria: {content.category} -> {category_id}")
-
-    params = {
-        "amount": num_questions,
-        "type": "multiple",
-        "encode": "url3986",
-    }
-    if category_id is not None:
-        params["category"] = category_id
-    if difficulty:
-        params["difficulty"] = difficulty
-
     api_url = "https://opentdb.com/api.php"
 
     for attempt in range(OPENTDB_MAX_RETRIES + 1):
@@ -53,7 +42,12 @@ def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
             data = response.json()
 
             if data["response_code"] == 0:
-                break  # sucesso — sai do loop de retry
+                results = data.get("results", [])
+                return results if results else None
+
+            if data["response_code"] == 1:
+                # Sem resultados para os parâmetros pedidos
+                return None
 
             if data["response_code"] == 5:
                 if attempt < OPENTDB_MAX_RETRIES:
@@ -73,9 +67,40 @@ def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
             logger.error(f"Erro ao chamar a API da Open Trivia DB: {e}")
             return None
 
-    try:
-        questions_data = data["results"]
+    return None
 
+
+def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
+    """
+    Gera um quiz chamando a API da Open Trivia DB.
+
+    Tenta primeiro obter perguntas em português (lang=pt). Se não houver
+    resultados disponíveis em PT, faz fallback para inglês (sem lang).
+    A resposta usa encoding HTML padrão da OpenTDB, descodificado via html.unescape().
+    """
+    category_id = CATEGORY_MAPPING.get(content.category)
+    logger.debug(f"Mapeamento de categoria: {content.category} -> {category_id}")
+
+    params = {
+        "amount": num_questions,
+        "type": "multiple",
+    }
+    if category_id is not None:
+        params["category"] = category_id
+    if difficulty:
+        params["difficulty"] = difficulty
+
+    # Tenta PT primeiro; fallback para inglês se sem resultados
+    questions_data = _call_opentdb({**params, "lang": "pt"})
+    if not questions_data:
+        logger.info("Sem resultados em PT, a tentar em inglês...")
+        questions_data = _call_opentdb(params)
+
+    if not questions_data:
+        logger.error("Sem perguntas disponíveis para os parâmetros pedidos.")
+        return None
+
+    try:
         with transaction.atomic():
             quiz = Quiz.objects.create(
                 title=f"Quiz: {content.title}", content=content

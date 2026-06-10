@@ -48,9 +48,9 @@ staticfiles/
 media/
 db.sqlite3
 
-# Arquivos de migrações (exceto o __init__.py)
-**/migrations/
-!**/migrations/__init__.py
+# # Arquivos de migrações (exceto o __init__.py)
+# **/migrations/
+# !**/migrations/__init__.py
 
 # Arquivos extras
 *.docx
