@@ -247,6 +247,29 @@ class QuizAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertIn("sobrecarregada", response.data["error"])
 
+    @patch("apps.quizzes.services._call_opentdb")
+    def test_generate_quiz_fallback_to_english(self, mock_call):
+        """Testa que fallback PT->EN é usado quando não há resultados em PT"""
+        en_question = {
+            "question": "What is 2+2?",
+            "correct_answer": "4",
+            "incorrect_answers": ["3", "5", "6"],
+        }
+        # Primeira chamada (PT) sem resultados; segunda (EN) com resultados
+        mock_call.side_effect = [None, [en_question]]
+
+        from apps.quizzes.services import generate_quiz_from_opentdb
+        quiz = generate_quiz_from_opentdb(self.content, difficulty="easy", num_questions=1)
+
+        self.assertIsNotNone(quiz)
+        self.assertEqual(mock_call.call_count, 2)
+        # Primeira chamada deve ter lang=pt
+        first_params = mock_call.call_args_list[0][0][0]
+        self.assertEqual(first_params.get("lang"), "pt")
+        # Segunda chamada (fallback) não deve ter lang
+        second_params = mock_call.call_args_list[1][0][0]
+        self.assertNotIn("lang", second_params)
+
     def test_generate_quiz_as_learner(self):
         """Testa gerar quiz como aprendiz (deve falhar)"""
         self.client.force_authenticate(user=self.learner)
