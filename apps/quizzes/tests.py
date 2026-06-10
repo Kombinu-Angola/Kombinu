@@ -237,6 +237,16 @@ class QuizAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("quiz_id", response.data)
 
+    @patch("apps.quizzes.views.generate_quiz_from_opentdb")
+    def test_generate_quiz_rate_limit_returns_503(self, mock_generate):
+        """Testa que rate limit da OpenTDB retorna 503 com mensagem específica"""
+        from apps.quizzes.services import OpenTDBRateLimitError
+        mock_generate.side_effect = OpenTDBRateLimitError("rate limit")
+        self.client.force_authenticate(user=self.creator)
+        response = self.client.post(self.generate_url, {"difficulty": "easy"})
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("sobrecarregada", response.data["error"])
+
     def test_generate_quiz_as_learner(self):
         """Testa gerar quiz como aprendiz (deve falhar)"""
         self.client.force_authenticate(user=self.learner)

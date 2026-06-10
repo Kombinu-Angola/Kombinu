@@ -1,3 +1,4 @@
+import time
 import requests
 import html
 from django.db import transaction
@@ -15,10 +16,20 @@ CATEGORY_MAPPING = {
     "design": None,
 }
 
+OPENTDB_MAX_RETRIES = 2
+OPENTDB_RETRY_DELAY = 2  # segundos entre tentativas quando rate limited
+
+
+class OpenTDBRateLimitError(Exception):
+    """Lançada quando a OpenTDB retorna response_code 5 após todas as tentativas."""
+    pass
+
 
 def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
     """
     Gera um quiz chamando a API da Open Trivia DB.
+    Faz retry automático (até OPENTDB_MAX_RETRIES vezes) quando a API
+    retorna rate limit (response_code 5).
     """
     category_id = CATEGORY_MAPPING.get(content.category)
     logger.debug(f"Mapeamento de categoria: {content.category} -> {category_id}")
@@ -26,7 +37,7 @@ def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
     params = {
         "amount": num_questions,
         "type": "multiple",
-        "encode": "url3986",  # Para lidar com caracteres especiais
+        "encode": "url3986",
     }
     if category_id is not None:
         params["category"] = category_id
@@ -34,15 +45,35 @@ def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
         params["difficulty"] = difficulty
 
     api_url = "https://opentdb.com/api.php"
-    try:
-        response = requests.get(api_url, params=params)
-        response.raise_for_status()
-        data = response.json()
 
-        if data["response_code"] != 0:
-            logger.error(f"Erro da API Open Trivia DB: {data['response_code']}")
+    for attempt in range(OPENTDB_MAX_RETRIES + 1):
+        try:
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            if data["response_code"] == 0:
+                break  # sucesso — sai do loop de retry
+
+            if data["response_code"] == 5:
+                if attempt < OPENTDB_MAX_RETRIES:
+                    logger.warning(
+                        f"OpenTDB rate limit (tentativa {attempt + 1}/{OPENTDB_MAX_RETRIES + 1}). "
+                        f"A aguardar {OPENTDB_RETRY_DELAY}s..."
+                    )
+                    time.sleep(OPENTDB_RETRY_DELAY)
+                    continue
+                logger.error("OpenTDB rate limit excedido após todas as tentativas.")
+                raise OpenTDBRateLimitError("Too many requests to OpenTDB")
+
+            logger.error(f"Erro da API Open Trivia DB: response_code={data['response_code']}")
             return None
 
+        except requests.RequestException as e:
+            logger.error(f"Erro ao chamar a API da Open Trivia DB: {e}")
+            return None
+
+    try:
         questions_data = data["results"]
 
         with transaction.atomic():
@@ -71,9 +102,7 @@ def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
                     )
 
             return quiz
-    except requests.RequestException as e:
-        logger.error(f"Erro ao chamar a API da Open Trivia DB: {e}")
-        return None
+
     except Exception as e:
         logger.error(f"Erro inesperado ao gerar o quiz: {e}")
         return None
