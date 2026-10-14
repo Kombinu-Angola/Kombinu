@@ -23,6 +23,14 @@ class Content(models.Model):
         CustomUser, on_delete=models.CASCADE, related_name="created_contents"
     )
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    organizacao = models.ForeignKey(
+        "tenancy.Organizacao",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="contents",
+        help_text="NULL = marketplace (B2C).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Campos adicionados para suportar o formulário de criação de conteúdo
