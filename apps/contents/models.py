@@ -1,5 +1,6 @@
 from django.db import models
 from apps.accounts.models import CustomUser
+from apps.tenancy.querysets import OrganizacaoQuerySet
 import uuid
 
 
@@ -42,6 +43,8 @@ class Content(models.Model):
     # Tags armazenadas como CSV para simplicidade no MVP
     tags = models.TextField(blank=True, default="")
     type = models.CharField(max_length=20, default="text")
+
+    objects = OrganizacaoQuerySet.as_manager()
 
     def __str__(self):
         return self.title

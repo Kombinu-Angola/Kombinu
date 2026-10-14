@@ -1,4 +1,4 @@
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 
 
 class IsCreator(IsAuthenticated):
@@ -11,3 +11,10 @@ class IsCreator(IsAuthenticated):
             super().has_permission(request, view)
             and request.user.user_type == "creator"
         )
+
+
+class IsContentOwner(BasePermission):
+    """Só o criador do conteúdo pode alterá-lo ou apagá-lo."""
+
+    def has_object_permission(self, request, view, obj):
+        return obj.creator_id == request.user.pk

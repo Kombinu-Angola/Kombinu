@@ -1,12 +1,14 @@
 from rest_framework import viewsets, filters
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.tenancy.scoping import WorkspaceScopedMixin, can_create_in
 from .models import Content
 from .serializers import ContentListSerializer, ContentSerializer
-from .permissions import IsCreator
+from .permissions import IsCreator, IsContentOwner
 
 
-class ContentViewSet(viewsets.ModelViewSet):
+class ContentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = Content.objects.all().order_by('-created_at')
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -24,15 +26,19 @@ class ContentViewSet(viewsets.ModelViewSet):
         """
         if self.action == "create":
             permission_classes = [IsCreator]
+        elif self.action in ("update", "partial_update", "destroy"):
+            permission_classes = [IsAuthenticated, IsContentOwner]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        serializer.save(creator=self.request.user)
+        if not can_create_in(self.request.user, self.workspace):
+            raise PermissionDenied("Sem permissão para criar conteúdo neste workspace.")
+        serializer.save(creator=self.request.user, organizacao=self.workspace)
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = self.scope(super().get_queryset())
         has_quiz_param = self.request.query_params.get("has_quiz", None)
         if has_quiz_param is not None:
             if has_quiz_param.lower() == "true":

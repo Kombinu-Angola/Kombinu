@@ -12,16 +12,20 @@ from .serializers import (
 from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.contents.models import Content
 from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
+from apps.tenancy.scoping import WorkspaceScopedMixin
 
 
-class QuizDetailView(generics.RetrieveAPIView):
+class QuizDetailView(WorkspaceScopedMixin, generics.RetrieveAPIView):
     queryset = Quiz.objects.all()
     serializer_class = QuizDetailSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = "id"
 
+    def get_queryset(self):
+        return self.scope(super().get_queryset())
 
-class QuizGenerationView(APIView):
+
+class QuizGenerationView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, content_id):
@@ -32,7 +36,12 @@ class QuizGenerationView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        content = get_object_or_404(Content, id=content_id)
+        content = get_object_or_404(self.scope(Content.objects.all()), id=content_id)
+        if content.creator_id != request.user.pk:
+            return Response(
+                {"error": "Only the content creator can generate its quiz."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = QuizGenerationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -70,7 +79,7 @@ class QuizGenerationView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-class QuizManualCreationView(APIView):
+class QuizManualCreationView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, content_id):
@@ -80,7 +89,12 @@ class QuizManualCreationView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        content = get_object_or_404(Content, id=content_id)
+        content = get_object_or_404(self.scope(Content.objects.all()), id=content_id)
+        if content.creator_id != request.user.pk:
+            return Response(
+                {"error": "Only the content creator can create its quiz."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Verifica se já existe um quiz para este conteúdo
         if hasattr(content, "quiz"):
@@ -94,7 +108,11 @@ class QuizManualCreationView(APIView):
             return Response({"error": "No questions provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            quiz = Quiz.objects.create(title=f"Quiz: {content.title}", content=content)
+            quiz = Quiz.objects.create(
+                title=f"Quiz: {content.title}",
+                content=content,
+                organizacao=content.organizacao,
+            )
             for q_data in questions_data:
                 q_text = q_data.get("question", "")
                 options = q_data.get("options", [])
@@ -111,11 +129,11 @@ class QuizManualCreationView(APIView):
         )
 
 
-class QuizSubmissionView(APIView):
+class QuizSubmissionView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, quiz_id):
-        quiz = get_object_or_404(Quiz, id=quiz_id)
+        quiz = get_object_or_404(self.scope(Quiz.objects.all()), id=quiz_id)
         user = request.user
 
         # Verificar se o usuário já respondeu a este quiz
@@ -147,7 +165,7 @@ class QuizSubmissionView(APIView):
 
         with transaction.atomic():
             submission = QuizSubmission.objects.create(
-                user=user, quiz=quiz, score=0
+                user=user, quiz=quiz, score=0, organizacao=self.workspace
             )
 
             for answer in answers_data:

@@ -103,7 +103,9 @@ def generate_quiz_from_opentdb(content, difficulty=None, num_questions=10):
     try:
         with transaction.atomic():
             quiz = Quiz.objects.create(
-                title=f"Quiz: {content.title}", content=content
+                title=f"Quiz: {content.title}",
+                content=content,
+                organizacao=content.organizacao,
             )
 
             for q_data in questions_data:

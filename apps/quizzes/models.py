@@ -1,6 +1,7 @@
 from django.db import models
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
+from apps.tenancy.querysets import OrganizacaoQuerySet
 import uuid
 
 
@@ -19,6 +20,8 @@ class Quiz(models.Model):
         related_name="quizzes",
         help_text="NULL = marketplace (B2C).",
     )
+
+    objects = OrganizacaoQuerySet.as_manager()
 
     def __str__(self):
         return self.title
@@ -58,6 +61,8 @@ class QuizSubmission(models.Model):
         related_name="quiz_submissions",
         help_text="NULL = marketplace (B2C).",
     )
+
+    objects = OrganizacaoQuerySet.as_manager()
 
     class Meta:
         unique_together = ("user", "quiz")
