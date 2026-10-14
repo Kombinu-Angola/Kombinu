@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from .serializers import (
     QuizDetailSerializer,
     QuizGenerationSerializer,
@@ -13,6 +13,10 @@ from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.contents.models import Content
 from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
 from apps.tenancy.scoping import WorkspaceScopedMixin
+
+
+class _InvalidAnswer(Exception):
+    pass
 
 
 class QuizDetailView(WorkspaceScopedMixin, generics.RetrieveAPIView):
@@ -136,13 +140,6 @@ class QuizSubmissionView(WorkspaceScopedMixin, APIView):
         quiz = get_object_or_404(self.scope(Quiz.objects.all()), id=quiz_id)
         user = request.user
 
-        # Verificar se o usuário já respondeu a este quiz
-        if QuizSubmission.objects.filter(user=user, quiz=quiz).exists():
-            return Response(
-                {"error": "You have already submitted this quiz."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = QuizSubmissionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -162,57 +159,79 @@ class QuizSubmissionView(WorkspaceScopedMixin, APIView):
 
         correct_count = 0
         details = []
+        total_questions = quiz.questions.count()
 
-        with transaction.atomic():
-            submission = QuizSubmission.objects.create(
-                user=user, quiz=quiz, score=0, organizacao=self.workspace
-            )
+        # D12: tentativas múltiplas; o XP só é concedido na primeira.
+        previous_attempts = QuizSubmission.objects.filter(user=user, quiz=quiz).count()
+        attempt = previous_attempts + 1
 
-            for answer in answers_data:
-                question_id = answer["question_id"]
-                selected_option_id = answer["selected_option_id"]
+        try:
+            with transaction.atomic():
+                submission = QuizSubmission.objects.create(
+                    user=user,
+                    quiz=quiz,
+                    score=0,
+                    attempt=attempt,
+                    total_questions=total_questions,
+                    organizacao=self.workspace,
+                )
 
-                try:
-                    question = quiz.questions.get(pk=question_id)
-                except Question.DoesNotExist:
-                    continue
+                for answer in answers_data:
+                    question_id = answer["question_id"]
+                    selected_option_id = answer["selected_option_id"]
 
-                try:
-                    selected_option = question.options.get(id=selected_option_id)
-                except Option.DoesNotExist:
-                    return Response(
-                        {
-                            "error": f"Option {selected_option_id} does not exist for question {question_id}."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
+                    try:
+                        question = quiz.questions.get(pk=question_id)
+                    except Question.DoesNotExist:
+                        continue
+
+                    try:
+                        selected_option = question.options.get(id=selected_option_id)
+                    except Option.DoesNotExist:
+                        # Levantar dentro do atomic faz rollback da submissão,
+                        # para não consumir a tentativa (e o XP da 1.ª).
+                        raise _InvalidAnswer(
+                            f"Option {selected_option_id} does not exist "
+                            f"for question {question_id}."
+                        )
+
+                    is_correct = selected_option.is_correct
+                    if is_correct:
+                        correct_count += 1
+
+                    QuizAnswer.objects.create(
+                        submission=submission,
+                        question=question,
+                        selected_option=selected_option,
                     )
 
-                is_correct = selected_option.is_correct
-                if is_correct:
-                    correct_count += 1
+                    correct_option = question.options.filter(is_correct=True).first()
+                    details.append(
+                        {
+                            "question_id": str(question_id),
+                            "correct": is_correct,
+                            "correct_option_id": str(correct_option.id)
+                            if correct_option
+                            else None,
+                        }
+                    )
 
-                QuizAnswer.objects.create(
-                    submission=submission,
-                    question=question,
-                    selected_option=selected_option,
-                )
+                # Score guardado em XP (respostas correctas × 10) para suportar
+                # o sistema de níveis — level = (total_xp // 100) + 1.
+                # D12: XP só na primeira tentativa.
+                xp_earned = correct_count * 10 if attempt == 1 else 0
+                submission.correct_count = correct_count
+                submission.xp_awarded = xp_earned
+                submission.score = xp_earned
+                submission.save()
+        except _InvalidAnswer as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            return Response(
+                {"error": "Concurrent submission detected. Please try again."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
-                correct_option = question.options.filter(is_correct=True).first()
-                details.append(
-                    {
-                        "question_id": str(question_id),
-                        "correct": is_correct,
-                        "correct_option_id": str(correct_option.id) if correct_option else None,
-                    }
-                )
-
-            # Score guardado em XP (respostas correctas × 10) para suportar
-            # o sistema de níveis — level = (total_xp // 100) + 1
-            xp_earned = correct_count * 10
-            submission.score = xp_earned
-            submission.save()
-
-        total_questions = quiz.questions.count()
         return Response(
             {
                 "score": xp_earned,

@@ -52,7 +52,13 @@ class QuizSubmission(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    # `score` mantém-se por compatibilidade (rankings/dashboard somam-no) e
+    # espelha `xp_awarded`: XP concedido nesta tentativa.
     score = models.PositiveIntegerField()
+    attempt = models.PositiveSmallIntegerField(default=1)
+    correct_count = models.PositiveIntegerField(default=0)
+    total_questions = models.PositiveIntegerField(default=0)
+    xp_awarded = models.PositiveIntegerField(default=0)
     organizacao = models.ForeignKey(
         "tenancy.Organizacao",
         on_delete=models.PROTECT,
@@ -65,7 +71,12 @@ class QuizSubmission(models.Model):
     objects = OrganizacaoQuerySet.as_manager()
 
     class Meta:
-        unique_together = ("user", "quiz")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "quiz", "attempt"],
+                name="unique_submission_user_quiz_attempt",
+            )
+        ]
 
     def __str__(self):
         return f"{self.user.email} - {self.quiz.title} - Score: {self.score}"

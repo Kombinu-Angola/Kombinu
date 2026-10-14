@@ -332,3 +332,68 @@ class QuizAPITest(APITestCase):
         }
         response = self.client.post(submit_url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class QuizAttemptsTest(APITestCase):
+    """D12: tentativas múltiplas; XP só na primeira."""
+
+    def setUp(self):
+        self.creator = CustomUser.objects.create_user(
+            username="att-creator@test.com", email="att-creator@test.com",
+            password="pass12345", user_type="creator",
+        )
+        self.learner = CustomUser.objects.create_user(
+            username="att-learner@test.com", email="att-learner@test.com",
+            password="pass12345", user_type="learner",
+        )
+        content = Content.objects.create(
+            title="C", description="d", creator=self.creator, category="tecnologia"
+        )
+        self.quiz = Quiz.objects.create(title="Q", content=content)
+        self.q1 = Question.objects.create(quiz=self.quiz, question_text="a?")
+        self.q2 = Question.objects.create(quiz=self.quiz, question_text="b?")
+        self.q1_ok = Option.objects.create(question=self.q1, text="ok", is_correct=True)
+        self.q1_ko = Option.objects.create(question=self.q1, text="ko", is_correct=False)
+        self.q2_ok = Option.objects.create(question=self.q2, text="ok", is_correct=True)
+        self.q2_ko = Option.objects.create(question=self.q2, text="ko", is_correct=False)
+        self.url = reverse("quiz-submit", args=[self.quiz.id])
+        self.client.force_authenticate(self.learner)
+
+    def _payload(self, o1, o2):
+        return {"answers": [
+            {"question_id": str(self.q1.id), "selected_option_id": str(o1.id)},
+            {"question_id": str(self.q2.id), "selected_option_id": str(o2.id)},
+        ]}
+
+    def test_first_attempt_awards_xp_and_stores_counts(self):
+        r = self.client.post(self.url, self._payload(self.q1_ok, self.q2_ko), format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        s = QuizSubmission.objects.get(user=self.learner, quiz=self.quiz)
+        self.assertEqual((s.attempt, s.correct_count, s.total_questions), (1, 1, 2))
+        self.assertEqual((s.xp_awarded, s.score), (10, 10))
+
+    def test_second_attempt_allowed_without_xp(self):
+        self.client.post(self.url, self._payload(self.q1_ok, self.q2_ok), format="json")
+        r = self.client.post(self.url, self._payload(self.q1_ok, self.q2_ok), format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data["xp earned"], 0)
+        second = QuizSubmission.objects.get(user=self.learner, quiz=self.quiz, attempt=2)
+        self.assertEqual((second.correct_count, second.xp_awarded, second.score), (2, 0, 0))
+        total = sum(QuizSubmission.objects.filter(user=self.learner).values_list("score", flat=True))
+        self.assertEqual(total, 20)
+
+    def test_invalid_option_does_not_consume_attempt(self):
+        other_q = Question.objects.create(quiz=self.quiz, question_text="c?")
+        payload = {"answers": [
+            {"question_id": str(other_q.id), "selected_option_id": str(self.q1_ok.id)},
+        ]}
+        r = self.client.post(self.url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(QuizSubmission.objects.filter(user=self.learner).exists())
+        # tentativa seguinte válida ainda conta como a 1.ª e dá XP
+        ok = {"answers": [
+            {"question_id": str(self.q1.id), "selected_option_id": str(self.q1_ok.id)},
+        ]}
+        r = self.client.post(self.url, ok, format="json")
+        self.assertEqual(r.data["xp earned"], 10)
+        self.assertEqual(QuizSubmission.objects.get(user=self.learner).attempt, 1)
