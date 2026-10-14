@@ -12,6 +12,8 @@ from .serializers import (
 from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.contents.models import Content
 from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
+from apps.rankings.models import XPEvent
+from apps.rankings.services import record_xp
 from apps.tenancy.scoping import WorkspaceScopedMixin
 
 
@@ -224,6 +226,13 @@ class QuizSubmissionView(WorkspaceScopedMixin, APIView):
                 submission.xp_awarded = xp_earned
                 submission.score = xp_earned
                 submission.save()
+                record_xp(
+                    user=user,
+                    amount=xp_earned,
+                    source_type=XPEvent.SOURCE_QUIZ_SUBMISSION,
+                    source_id=submission.pk,
+                    organizacao=self.workspace,
+                )
         except _InvalidAnswer as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError:

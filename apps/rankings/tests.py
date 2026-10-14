@@ -158,3 +158,60 @@ class GlobalRankingViewTest(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.data["user_position"]["position"], 3)
+
+
+class XPEventLedgerTest(APITestCase):
+    def setUp(self):
+        self.creator = CustomUser.objects.create_user(
+            username="led-creator@test.com", email="led-creator@test.com",
+            password="pass12345", user_type="creator",
+        )
+        self.learner = CustomUser.objects.create_user(
+            username="led-learner@test.com", email="led-learner@test.com",
+            password="pass12345", user_type="learner",
+        )
+        content = Content.objects.create(
+            title="C", description="d", creator=self.creator, category="tecnologia"
+        )
+        self.quiz = Quiz.objects.create(title="Q", content=content)
+        from apps.quizzes.models import Option, Question
+        q = Question.objects.create(quiz=self.quiz, question_text="a?")
+        self.ok = Option.objects.create(question=q, text="ok", is_correct=True)
+        self.q = q
+        self.client.force_authenticate(self.learner)
+        self.url = reverse("quiz-submit", args=[self.quiz.id])
+
+    def _submit(self):
+        return self.client.post(
+            self.url,
+            {"answers": [{"question_id": str(self.q.id), "selected_option_id": str(self.ok.id)}]},
+            format="json",
+        )
+
+    def test_first_attempt_creates_one_event(self):
+        from apps.rankings.models import XPEvent
+        self._submit()
+        events = XPEvent.objects.filter(user=self.learner)
+        self.assertEqual(events.count(), 1)
+        e = events.get()
+        self.assertEqual((e.amount, e.source_type), (10, "quiz_submission"))
+        self.assertIsNone(e.organizacao)
+        self.assertEqual(
+            e.source_id, str(QuizSubmission.objects.get(user=self.learner).pk)
+        )
+
+    def test_retry_creates_no_event(self):
+        from apps.rankings.models import XPEvent
+        self._submit()
+        self._submit()
+        self.assertEqual(XPEvent.objects.filter(user=self.learner).count(), 1)
+        self.assertEqual(QuizSubmission.objects.filter(user=self.learner).count(), 2)
+
+    def test_record_xp_is_idempotent_and_skips_zero(self):
+        from apps.rankings.models import XPEvent
+        from apps.rankings.services import record_xp
+        kw = dict(user=self.learner, source_type="enquete_voto", source_id="abc")
+        self.assertIsNone(record_xp(amount=0, **kw))
+        record_xp(amount=5, **kw)
+        record_xp(amount=5, **kw)
+        self.assertEqual(XPEvent.objects.filter(source_id="abc").count(), 1)
