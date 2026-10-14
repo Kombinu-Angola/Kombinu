@@ -11,6 +11,14 @@ class Quiz(models.Model):
         Content, on_delete=models.CASCADE, related_name="quiz"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    organizacao = models.ForeignKey(
+        "tenancy.Organizacao",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="quizzes",
+        help_text="NULL = marketplace (B2C).",
+    )
 
     def __str__(self):
         return self.title
@@ -42,6 +50,14 @@ class QuizSubmission(models.Model):
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
     submitted_at = models.DateTimeField(auto_now_add=True)
     score = models.PositiveIntegerField()
+    organizacao = models.ForeignKey(
+        "tenancy.Organizacao",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="quiz_submissions",
+        help_text="NULL = marketplace (B2C).",
+    )
 
     class Meta:
         unique_together = ("user", "quiz")
