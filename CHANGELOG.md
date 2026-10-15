@@ -5,6 +5,26 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Ranking por workspace (R4)
+
+### Alterado
+
+- **Ranking (`GET /api/rankings/global/`):** passa a ler o ledger `XPEvent` em vez de `QuizSubmission.score` e a respeitar o header `X-Workspace`. O ranking escolar já não soma o XP do marketplace nem de outra organização; cada contexto tem a sua tabela.
+- **Cálculo na base de dados:** posição por `RANK()` (empates partilham posição) e posição do utilizador por agregação com `HAVING`, em vez de carregar todos os utilizadores em Python.
+- **Paginação:** `?page=` e `?page_size=` (máx. 100, por omissão 100). A resposta mantém `top_users` e `user_position` e acrescenta `count`, `page`, `page_size`, `total_pages` e `workspace`.
+- **Dashboards (`LearnerStats`, `LearnerCourses`, `CreatorStats`):** respeitam o workspace activo. `totalPoints` é o XP do workspace; `currentLevel` e os `pontos`/`nivel` do perfil vêm da carteira global (XPEvent de todos os contextos).
+- **XP de enquetes** passa a contar no ranking e nos pontos, por viver no mesmo ledger.
+
+### Corrigido
+
+- O ranking e os dashboards ignoravam o workspace activo e podiam misturar XP e dados de organizações diferentes (R4/R7).
+
+### Testes
+
+- Isolamento de ranking e dashboards entre duas escolas fictícias e o marketplace, empates, paginação, limite de queries e fonte do XP.
+
+---
+
 ## [Não Lançado] - Fase de Expansão B2B/B2C — Fundação multi-tenant
 
 ### Adicionado
@@ -29,11 +49,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - **Fugas de acesso (R7):** só o criador pode fazer `update`/`partial_update`/`destroy` de um `Content`; geração e criação manual de quiz exigem que o conteúdo pertença ao utilizador; criar conteúdo numa organização exige papel `teacher` ou `admin`.
 - **Submissão com opção inválida** deixava a submissão criada com score 0 (a transacção fazia commit ao devolver 400). Passa a fazer rollback, para não consumir a tentativa nem o XP.
 
-### Dívida conhecida (a tratar na semana seguinte)
+### Dívida conhecida
 
-- O ranking global continua a somar `score` de todos os contextos; filtro por `organizacao`, paginação e ranking por instituição ficam por fazer.
-- `LearnerStatsView`, `LearnerCoursesView` e `CreatorStatsView` não respeitam o workspace activo.
-- O ranking e os dashboards ainda leem `QuizSubmission.score`, não o `XPEvent`.
 - Enquetes: sem endpoints para publicar/encerrar manualmente (só fecham por `sampleTarget`); `segmentSize` guardado mas sem uso (semântica por confirmar); o gatilho (`trigger`) é só um tipo, sem alvo concreto (D11); **D9 (anonimato) pendente de validação legal**.
 - Trilhas: sem endpoints de criação/edição (só admin); limiares de estrelas (50/75/90%) e XP por voto (5) são sugestões por confirmar; minutos do exame final fixos em 15 (como `timeLimit` do quiz); reordenar itens exige duas passagens (unique não deferível em SQLite).
 
