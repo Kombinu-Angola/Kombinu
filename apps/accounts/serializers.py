@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from django.db.models import Sum
 from .models import CustomUser
 
 
@@ -47,9 +46,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return nome or obj.email
 
     def get_pontos(self, obj):
-        from apps.quizzes.models import QuizSubmission
-        result = QuizSubmission.objects.filter(user=obj).aggregate(total=Sum("score"))
-        return result["total"] or 0
+        # Carteira global: XP de todos os contextos (fonte: XPEvent).
+        from apps.rankings.selectors import xp_total
+        return xp_total(obj)
 
     def get_nivel(self, obj):
-        return (self.get_pontos(obj) // 100) + 1
+        from apps.rankings.selectors import level_for
+        return level_for(self.get_pontos(obj))

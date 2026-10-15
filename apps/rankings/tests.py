@@ -4,6 +4,7 @@ from django.urls import reverse
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
 from apps.quizzes.models import Quiz, QuizSubmission
+from apps.rankings.services import record_xp
 
 
 class GlobalRankingViewTest(APITestCase):
@@ -51,7 +52,28 @@ class GlobalRankingViewTest(APITestCase):
         self.quiz2 = Quiz.objects.create(title="Quiz 2", content=self.content2)
 
     def _submit(self, user, quiz, score):
-        return QuizSubmission.objects.create(user=user, quiz=quiz, score=score)
+        """Como a view: submissão + linha no ledger (o ranking lê o XPEvent)."""
+        submission = QuizSubmission.objects.create(
+            user=user, quiz=quiz, score=score, xp_awarded=score
+        )
+        record_xp(
+            user=user,
+            amount=score,
+            source_type="quiz_submission",
+            source_id=submission.pk,
+        )
+        return submission
+
+    def test_ranking_reads_xpevent_not_submission_score(self):
+        """R4: a fonte dos pontos é o ledger, não QuizSubmission.score."""
+        QuizSubmission.objects.create(user=self.user1, quiz=self.quiz1, score=50)
+        self._submit(self.user2, self.quiz1, 10)
+
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+
+        self.assertEqual([u["total_score"] for u in response.data["top_users"]], [10])
+        self.assertEqual(response.data["user_position"]["total_score"], 0)
 
     def test_unauthenticated_returns_401(self):
         response = self.client.get(self.url)

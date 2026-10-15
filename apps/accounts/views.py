@@ -167,20 +167,25 @@ class LoginView(APIView):
 from rest_framework.permissions import IsAuthenticated
 from apps.contents.models import Content
 from apps.quizzes.models import QuizSubmission
-from django.db.models import Sum
+from apps.rankings import selectors as xp
+from apps.tenancy.scoping import WorkspaceScopedMixin
 
-class LearnerStatsView(APIView):
+
+class LearnerStatsView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Get Learner Stats", tags=["Dashboard"])
     def get(self, request):
         user = request.user
-        submissions = QuizSubmission.objects.filter(user=user)
-        
+        organizacao = self.workspace
+        submissions = QuizSubmission.objects.for_context(organizacao).filter(user=user)
+
         courses_completed = submissions.values('quiz__content').distinct().count()
-        total_points = submissions.aggregate(Sum('score'))['score__sum'] or 0
         quizzes_taken = submissions.count()
-        current_level = (total_points // 100) + 1
+        # Pontos: XP ganho neste workspace (XPEvent). O nível é da carteira
+        # global do utilizador (um só histórico de XP entre workspaces).
+        total_points = xp.xp_total(user, organizacao)
+        current_level = xp.level_for(xp.xp_total(user))
         
         return Response({
             "coursesCompleted": courses_completed,
@@ -189,7 +194,7 @@ class LearnerStatsView(APIView):
             "quizzesTaken": quizzes_taken
         })
 
-class LearnerCoursesView(APIView):
+class LearnerCoursesView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Get Enrolled Courses", tags=["Dashboard"])
@@ -198,6 +203,7 @@ class LearnerCoursesView(APIView):
 
         submissions = (
             QuizSubmission.objects
+            .for_context(self.workspace)
             .filter(user=user)
             .select_related("quiz__content")
             .order_by("-submitted_at")
@@ -220,17 +226,24 @@ class LearnerCoursesView(APIView):
 
         return Response(data)
 
-class CreatorStatsView(APIView):
+class CreatorStatsView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Get Creator Stats", tags=["Dashboard"])
     def get(self, request):
         user = request.user
-        created_contents = Content.objects.filter(creator=user)
+        organizacao = self.workspace
+        created_contents = Content.objects.for_context(organizacao).filter(creator=user)
         total_courses = created_contents.count()
-        
-        # totalStudents: unique users who took quizzes on my content
-        total_students = QuizSubmission.objects.filter(quiz__content__creator=user).values('user').distinct().count()
+
+        # totalStudents: unique users who took quizzes on my content (neste workspace)
+        total_students = (
+            QuizSubmission.objects.for_context(organizacao)
+            .filter(quiz__content__creator=user)
+            .values('user')
+            .distinct()
+            .count()
+        )
         
         return Response({
             "totalStudents": total_students,
