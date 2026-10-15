@@ -15,6 +15,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - **`XPEvent` (app `rankings`):** ledger único de XP, idempotente por `(source_type, source_id)`, com backfill a partir das submissões existentes.
 - **`QuizSubmission`:** `attempt`, `correct_count`, `total_questions` e `xp_awarded`. Backfill aproximado (`correct_count = score // 10`; `total_questions` = nº actual de perguntas).
 - **Testes de isolamento** entre duas organizações fictícias e o marketplace (SLA §8.3).
+- **Enquetes (`apps.enquetes`):** modelos `Enquete`, `EnqueteOpcao`, `EnqueteVoto` e `EnqueteExibicao`. Endpoints em `/api/enquetes/`: criar (forma `SurveyDraft`), listar/detalhe, votar (`optionId`), marcar vista/dispensada e resultados agregados (forma `SurveyResult`, percentagens 0–100). Voto único por utilizador (409 na repetição), XP simbólico de 5 por voto via `XPEvent`, fecho automático ao atingir `sampleTarget`. A API nunca expõe a identidade do votante e a vista do votante omite `decision`.
+- **Trilhas (`apps.trilhas`):** modelos `Trilha`, `TrilhaItem` (conteúdo/quiz/enquete, com `CheckConstraint` de alvo único) e `TrilhaProgresso`. `GET /api/trilhas/` e `/api/trilhas/<id>/` na forma `LearningTrail` com `status` (`concluido`/`ativo`/`bloqueado`) e `stars` calculados por utilizador. Itens de quiz e enquete concluem-se ao submeter/votar; itens de conteúdo via `POST /api/trilhas/items/<id>/complete/`. Sem `TrilhaMista` e sem campos de `AdaptiveTrail` (D4/D5).
 
 ### Alterado
 
@@ -32,6 +34,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - O ranking global continua a somar `score` de todos os contextos; filtro por `organizacao`, paginação e ranking por instituição ficam por fazer.
 - `LearnerStatsView`, `LearnerCoursesView` e `CreatorStatsView` não respeitam o workspace activo.
 - O ranking e os dashboards ainda leem `QuizSubmission.score`, não o `XPEvent`.
+- Enquetes: sem endpoints para publicar/encerrar manualmente (só fecham por `sampleTarget`); `segmentSize` guardado mas sem uso (semântica por confirmar); o gatilho (`trigger`) é só um tipo, sem alvo concreto (D11); **D9 (anonimato) pendente de validação legal**.
+- Trilhas: sem endpoints de criação/edição (só admin); limiares de estrelas (50/75/90%) e XP por voto (5) são sugestões por confirmar; minutos do exame final fixos em 15 (como `timeLimit` do quiz); reordenar itens exige duas passagens (unique não deferível em SQLite).
 
 ---
 
