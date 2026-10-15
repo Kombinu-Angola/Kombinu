@@ -64,6 +64,7 @@ LOCAL_APPS = [
     "apps.quizzes.apps.QuizzesConfig",
     "apps.rankings.apps.RankingsConfig",
     "apps.tenancy.apps.TenancyConfig",
+    "apps.enquetes.apps.EnquetesConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_APPS + LOCAL_APPS
