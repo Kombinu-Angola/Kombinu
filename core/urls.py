@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/contents/", include("apps.contents.urls")),
     path("api/quizzes/", include("apps.quizzes.urls")),
     path("api/rankings/", include("apps.rankings.urls")),
+    path("api/enquetes/", include("apps.enquetes.urls")),
     # Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
