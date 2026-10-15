@@ -140,14 +140,23 @@ class GlobalRankingViewTest(APITestCase):
         self.assertEqual(response.data["user_position"]["total_score"], 10)
         self.assertEqual(response.data["top_users"][0]["total_score"], 10)
 
-    def test_top_users_contains_email_field(self):
-        self._submit(self.user1, self.quiz1, 5)
+    def test_top_users_exposes_display_name_and_never_email(self):
+        self.user1.first_name = "Ana"
+        self.user1.last_name = "Silva"
+        self.user1.save()
+        self._submit(self.user1, self.quiz1, 10)
+        self._submit(self.user2, self.quiz1, 5)
 
         self.client.force_authenticate(user=self.user1)
         response = self.client.get(self.url)
 
-        self.assertIn("email", response.data["top_users"][0])
-        self.assertEqual(response.data["top_users"][0]["email"], self.user1.email)
+        top = response.data["top_users"]
+        self.assertEqual(top[0]["name"], "Ana Silva")
+        # sem nome: fallback neutro, nunca o email/username
+        self.assertEqual(top[1]["name"], f"Utilizador {self.user2.pk}")
+        for entry in top:
+            self.assertNotIn("email", entry)
+        self.assertNotIn("@", str(response.data))
 
     def test_user_ranked_last_with_zero_score(self):
         self._submit(self.user1, self.quiz1, 0)
