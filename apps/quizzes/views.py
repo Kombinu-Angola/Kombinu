@@ -15,6 +15,7 @@ from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
 from apps.rankings.models import XPEvent
 from apps.rankings.services import record_xp
 from apps.tenancy.scoping import WorkspaceScopedMixin
+from apps.trilhas.services import on_quiz_submitted
 
 
 class _InvalidAnswer(Exception):
@@ -233,6 +234,7 @@ class QuizSubmissionView(WorkspaceScopedMixin, APIView):
                     source_id=submission.pk,
                     organizacao=self.workspace,
                 )
+                on_quiz_submitted(user, submission, self.workspace)
         except _InvalidAnswer as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError:

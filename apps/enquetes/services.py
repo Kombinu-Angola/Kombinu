@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.rankings.models import XPEvent
 from apps.rankings.services import record_xp
 from apps.tenancy.models import Membership
+from apps.trilhas.services import on_enquete_voted
 
 from .models import Enquete, EnqueteExibicao, EnqueteOpcao, EnqueteVoto
 
@@ -89,6 +90,7 @@ def cast_vote(*, user, enquete, opcao_id, organizacao):
                 source_id=voto.pk,
                 organizacao=organizacao,
             )
+            on_enquete_voted(user, enquete, organizacao)
             if enquete.votes.count() >= enquete.sample_target:
                 enquete.state = "encerrada"
                 enquete.closed_at = timezone.now()
