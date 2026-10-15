@@ -5,6 +5,19 @@ from django.urls import reverse
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
 from apps.quizzes.models import Quiz, QuizSubmission
+from apps.rankings.services import record_xp
+
+
+def award_xp(user, quiz, score):
+    """Como a view de submissão: submissão + linha no ledger de XP."""
+    submission = QuizSubmission.objects.create(
+        user=user, quiz=quiz, score=score, xp_awarded=score
+    )
+    record_xp(
+        user=user, amount=score, source_type="quiz_submission",
+        source_id=submission.pk,
+    )
+    return submission
 
 
 class CustomUserModelTest(TestCase):
@@ -194,20 +207,20 @@ class LearnerStatsAPITest(APITestCase):
 
     def test_score_is_stored_as_xp(self):
         """score = respostas correctas × 10 (XP), não o count bruto"""
-        QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=70)
+        award_xp(self.learner, self.quiz, 70)
         self.client.force_authenticate(user=self.learner)
         response = self.client.get(self.url)
         self.assertEqual(response.data["totalPoints"], 70)
 
     def test_level_2_after_100_xp(self):
         """100 XP (1 quiz perfeito de 10 perguntas) → Level 2"""
-        QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=100)
+        award_xp(self.learner, self.quiz, 100)
         self.client.force_authenticate(user=self.learner)
         response = self.client.get(self.url)
         self.assertEqual(response.data["currentLevel"], 2)
 
     def test_level_stays_1_below_100_xp(self):
-        QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=90)
+        award_xp(self.learner, self.quiz, 90)
         self.client.force_authenticate(user=self.learner)
         response = self.client.get(self.url)
         self.assertEqual(response.data["currentLevel"], 1)
