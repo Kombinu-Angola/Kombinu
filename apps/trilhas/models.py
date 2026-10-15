@@ -87,10 +87,10 @@ class TrilhaItem(models.Model):
     class Meta:
         ordering = ["order"]
         constraints = [
+            # Não deferível: SQLite (dev/test) não suporta. Reordenar exige
+            # actualizar em duas passagens (ou ordens temporárias).
             models.UniqueConstraint(
-                fields=["trilha", "order"],
-                name="unique_trilhaitem_order",
-                deferrable=models.Deferrable.DEFERRED,
+                fields=["trilha", "order"], name="unique_trilhaitem_order"
             ),
             # Exactamente um alvo, coerente com `kind`.
             models.CheckConstraint(
