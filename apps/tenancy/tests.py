@@ -95,3 +95,42 @@ class ContentOwnershipTests(APITestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+
+
+class ProtectHistoryTests(APITestCase):
+    """R5: apagar não destrói o histórico dos alunos."""
+
+    def setUp(self):
+        self.owner = make_user("prot-owner@test.com", "creator")
+        self.learner = make_user("prot-learner@test.com")
+        self.content = make_content(self.owner)
+        self.quiz = make_quiz(self.content)
+
+    def _submit(self):
+        question = self.quiz.questions.get()
+        option = question.options.get(is_correct=True)
+        self.client.force_authenticate(self.learner)
+        return self.client.post(
+            reverse("quiz-submit", args=[self.quiz.id]),
+            {"answers": [{"question_id": str(question.id), "selected_option_id": str(option.id)}]},
+            format="json",
+        )
+
+    def test_content_with_submissions_cannot_be_deleted(self):
+        from apps.quizzes.models import QuizSubmission
+        self.assertEqual(self._submit().status_code, status.HTTP_200_OK)
+        self.client.force_authenticate(self.owner)
+        r = self.client.delete(reverse("content-detail", args=[self.content.id]))
+        self.assertEqual(r.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Content.objects.filter(pk=self.content.pk).exists())
+        self.assertEqual(QuizSubmission.objects.count(), 1)
+
+    def test_creator_with_content_cannot_be_deleted(self):
+        from django.db.models import ProtectedError
+        with self.assertRaises(ProtectedError):
+            self.owner.delete()
+
+    def test_content_without_submissions_can_be_deleted(self):
+        self.client.force_authenticate(self.owner)
+        r = self.client.delete(reverse("content-detail", args=[self.content.id]))
+        self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)

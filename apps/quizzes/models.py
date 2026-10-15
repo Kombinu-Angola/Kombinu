@@ -50,7 +50,7 @@ class Option(models.Model):
 
 class QuizSubmission(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    quiz = models.ForeignKey(Quiz, on_delete=models.PROTECT)
     submitted_at = models.DateTimeField(auto_now_add=True)
     # `score` mantém-se por compatibilidade (rankings/dashboard somam-no) e
     # espelha `xp_awarded`: XP concedido nesta tentativa.

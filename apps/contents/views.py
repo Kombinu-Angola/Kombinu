@@ -1,4 +1,6 @@
-from rest_framework import viewsets, filters
+from django.db.models import ProtectedError
+from rest_framework import viewsets, filters, status
+from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
@@ -31,6 +33,16 @@ class ContentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def destroy(self, request, *args, **kwargs):
+        # R5: o histórico (submissões/XP) não se apaga em cascata.
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"error": "Este conteúdo já tem submissões e não pode ser apagado."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
     def perform_create(self, serializer):
         if not can_create_in(self.request.user, self.workspace):
