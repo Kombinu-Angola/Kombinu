@@ -5,6 +5,40 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Fase de Expansão B2B/B2C — Fundação multi-tenant
+
+### Adicionado
+
+- **App `tenancy`:** modelos `Organizacao` e `Membership` (papéis `student`/`teacher`/`admin`, ano/faculdade/curso em texto livre). Isolamento **lógico** por FK `organizacao` — `NULL` = marketplace (decisão D1; SLA §9.2 revisto).
+- **FK `organizacao` nullable** em `Content`, `Quiz` e `QuizSubmission`. Dados existentes ficam no marketplace sem data migration.
+- **Scoping central por workspace:** `OrganizacaoQuerySet.for_context()` e `WorkspaceScopedMixin`. O contexto activo vem do header `X-Workspace` (UUID da organização; ausente ou `marketplace` = B2C) e a pertença é validada contra `Membership` em cada pedido. Objectos de outro contexto devolvem 404.
+- **`XPEvent` (app `rankings`):** ledger único de XP, idempotente por `(source_type, source_id)`, com backfill a partir das submissões existentes.
+- **`QuizSubmission`:** `attempt`, `correct_count`, `total_questions` e `xp_awarded`. Backfill aproximado (`correct_count = score // 10`; `total_questions` = nº actual de perguntas).
+- **Testes de isolamento** entre duas organizações fictícias e o marketplace (SLA §8.3).
+- **Enquetes (`apps.enquetes`):** modelos `Enquete`, `EnqueteOpcao`, `EnqueteVoto` e `EnqueteExibicao`. Endpoints em `/api/enquetes/`: criar (forma `SurveyDraft`), listar/detalhe, votar (`optionId`), marcar vista/dispensada e resultados agregados (forma `SurveyResult`, percentagens 0–100). Voto único por utilizador (409 na repetição), XP simbólico de 5 por voto via `XPEvent`, fecho automático ao atingir `sampleTarget`. A API nunca expõe a identidade do votante e a vista do votante omite `decision`.
+- **Trilhas (`apps.trilhas`):** modelos `Trilha`, `TrilhaItem` (conteúdo/quiz/enquete, com `CheckConstraint` de alvo único) e `TrilhaProgresso`. `GET /api/trilhas/` e `/api/trilhas/<id>/` na forma `LearningTrail` com `status` (`concluido`/`ativo`/`bloqueado`) e `stars` calculados por utilizador. Itens de quiz e enquete concluem-se ao submeter/votar; itens de conteúdo via `POST /api/trilhas/items/<id>/complete/`. Sem `TrilhaMista` e sem campos de `AdaptiveTrail` (D4/D5).
+
+### Alterado
+
+- **Tentativas múltiplas de quiz (D12):** `unique_together(user, quiz)` substituído por `UniqueConstraint(user, quiz, attempt)`. O XP só é concedido na primeira tentativa; `score` mantém-se como espelho de `xp_awarded`. A repetição deixa de devolver 400.
+- **Histórico protegido (R5):** `Content.creator` e `QuizSubmission.quiz` passam de `CASCADE` a `PROTECT`. `DELETE` de conteúdo com submissões devolve 409.
+- **Ranking global:** `top_users` devolve `name` (nome de exibição, ou `Utilizador <id>`) em vez de `email`. **Breaking change** para consumidores que liam `email`.
+
+### Corrigido
+
+- **Fugas de acesso (R7):** só o criador pode fazer `update`/`partial_update`/`destroy` de um `Content`; geração e criação manual de quiz exigem que o conteúdo pertença ao utilizador; criar conteúdo numa organização exige papel `teacher` ou `admin`.
+- **Submissão com opção inválida** deixava a submissão criada com score 0 (a transacção fazia commit ao devolver 400). Passa a fazer rollback, para não consumir a tentativa nem o XP.
+
+### Dívida conhecida (a tratar na semana seguinte)
+
+- O ranking global continua a somar `score` de todos os contextos; filtro por `organizacao`, paginação e ranking por instituição ficam por fazer.
+- `LearnerStatsView`, `LearnerCoursesView` e `CreatorStatsView` não respeitam o workspace activo.
+- O ranking e os dashboards ainda leem `QuizSubmission.score`, não o `XPEvent`.
+- Enquetes: sem endpoints para publicar/encerrar manualmente (só fecham por `sampleTarget`); `segmentSize` guardado mas sem uso (semântica por confirmar); o gatilho (`trigger`) é só um tipo, sem alvo concreto (D11); **D9 (anonimato) pendente de validação legal**.
+- Trilhas: sem endpoints de criação/edição (só admin); limiares de estrelas (50/75/90%) e XP por voto (5) são sugestões por confirmar; minutos do exame final fixos em 15 (como `timeLimit` do quiz); reordenar itens exige duas passagens (unique não deferível em SQLite).
+
+---
+
 ## [2.7.0] - Geração de Quiz OpenTDB (10 de Junho 2026)
 
 ### Corrigido

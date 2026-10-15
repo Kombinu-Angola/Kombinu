@@ -6,6 +6,15 @@ from django.db.models import Sum
 from apps.quizzes.models import QuizSubmission
 
 
+def display_name(entry):
+    """
+    Nome de exibição para o ranking. Nunca devolve email: no registo o
+    `username` é o próprio email, por isso também não serve de fallback.
+    """
+    name = f"{entry['user__first_name']} {entry['user__last_name']}".strip()
+    return name or f"Utilizador {entry['user_id']}"
+
+
 class GlobalRankingView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -13,7 +22,7 @@ class GlobalRankingView(APIView):
         # Uma única query com JOIN — elimina o problema N+1 anterior
         user_scores = list(
             QuizSubmission.objects
-            .values("user_id", "user__email")
+            .values("user_id", "user__first_name", "user__last_name")
             .annotate(total_score=Sum("score"))
             .order_by("-total_score")
         )
@@ -21,7 +30,7 @@ class GlobalRankingView(APIView):
         top_users_data = [
             {
                 "user_id": entry["user_id"],
-                "email": entry["user__email"],
+                "name": display_name(entry),
                 "total_score": entry["total_score"],
                 "position": i + 1,
             }
