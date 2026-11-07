@@ -23,7 +23,16 @@ class ContentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Content
         fields = "__all__"
-        read_only_fields = ("id", "creator", "created_at", "has_quiz", "quiz_id")
+        # `organizacao` vem sempre do workspace activo (perform_create) e nunca
+        # do corpo do pedido: editá-la movia o conteúdo para outro tenant.
+        read_only_fields = (
+            "id",
+            "creator",
+            "organizacao",
+            "created_at",
+            "has_quiz",
+            "quiz_id",
+        )
 
 
 class ContentListSerializer(ContentSerializer):
