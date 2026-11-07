@@ -332,3 +332,26 @@ class QuizAPITest(APITestCase):
         }
         response = self.client.post(submit_url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_submit_quiz_duplicate_question_is_rejected(self):
+        """Respostas repetidas à mesma pergunta são rejeitadas e não dão XP"""
+        quiz = Quiz.objects.create(title="Quiz", content=self.content)
+        question = Question.objects.create(quiz=quiz, question_text="Q1")
+        options = [
+            Option.objects.create(question=question, text=str(i), is_correct=(i == 0))
+            for i in range(4)
+        ]
+
+        submit_url = reverse("quiz-submit", kwargs={"quiz_id": quiz.id})
+        self.client.force_authenticate(user=self.learner)
+
+        data = {
+            "answers": [
+                {"question_id": str(question.id), "selected_option_id": str(option.id)}
+                for option in options
+                for _ in range(25)
+            ]
+        }
+        response = self.client.post(submit_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(QuizSubmission.objects.filter(user=self.learner, quiz=quiz).exists())

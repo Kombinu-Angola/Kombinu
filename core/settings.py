@@ -32,7 +32,13 @@ CSRF_TRUSTED_ORIGINS = (
 
 # Security settings for production
 if not DEBUG:
+    # O Render termina o TLS no proxy e reencaminha em HTTP com
+    # X-Forwarded-Proto; sem isto o SECURE_SSL_REDIRECT entra em ciclo.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
@@ -142,7 +148,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # CORS Settings - Configure properly for production
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True") == "True"
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False") == "True"
 
 # For production, set CORS_ALLOW_ALL_ORIGINS=False and configure specific origins:
 CORS_ALLOWED_ORIGINS = (
@@ -191,6 +197,20 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Valores provisórios (D8 do relatório de auth institucional). A cache
+    # por omissão é local a cada processo: com N workers o limite efectivo
+    # é até N vezes maior.
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "30/min",
+        "login_identifier": "5/min",
+        "register": "10/hour",
+        "token_refresh": "30/min",
+    },
+    # Nº de proxies à frente da app, para ler o IP do cliente em
+    # X-Forwarded-For. Sem valor, o DRF usa o cabeçalho inteiro como chave.
+    "NUM_PROXIES": int(os.environ["DRF_NUM_PROXIES"])
+    if os.getenv("DRF_NUM_PROXIES")
+    else None,
 }
 
 # Cofirguration for drf_spectacular
