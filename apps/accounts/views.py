@@ -4,10 +4,16 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from .serializers import UserProfileSerializer, UserRegistrationSerializer
+from .throttles import (
+    LoginIdentifierRateThrottle,
+    LoginRateThrottle,
+    RegisterRateThrottle,
+)
 
 
 class RegisterView(APIView):
     permission_classes = []
+    throttle_classes = [RegisterRateThrottle]
 
     @extend_schema(
         summary="Registrar novo usuário",
@@ -74,6 +80,7 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = []
+    throttle_classes = [LoginRateThrottle, LoginIdentifierRateThrottle]
 
     @extend_schema(
         summary="Autenticar usuário",
