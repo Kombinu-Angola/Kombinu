@@ -32,7 +32,13 @@ CSRF_TRUSTED_ORIGINS = (
 
 # Security settings for production
 if not DEBUG:
+    # O Render termina o TLS no proxy e reencaminha em HTTP com
+    # X-Forwarded-Proto; sem isto o SECURE_SSL_REDIRECT entra em ciclo.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
