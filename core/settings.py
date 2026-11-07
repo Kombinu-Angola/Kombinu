@@ -148,7 +148,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # CORS Settings - Configure properly for production
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True") == "True"
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False") == "True"
 
 # For production, set CORS_ALLOW_ALL_ORIGINS=False and configure specific origins:
 CORS_ALLOWED_ORIGINS = (
