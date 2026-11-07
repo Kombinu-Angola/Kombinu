@@ -56,6 +56,22 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [2.7.1] - Hotfix de segurança em produção (Não Lançado)
+
+### Segurança
+
+- **HTTPS atrás do proxy do Render:** com `DEBUG=False`, a app passa a confiar em `X-Forwarded-Proto` (`SECURE_PROXY_SSL_HEADER`), o que permite desligar o `DEBUG` em produção sem ciclo de redirecção. Acrescenta HSTS (`SECURE_HSTS_SECONDS`, 3600 por omissão, sem subdomínios nem preload); cookies seguras mantêm-se.
+- **CORS fechado por omissão:** `CORS_ALLOW_ALL_ORIGINS` passa a `False` por omissão; as origens permitidas vêm de `CORS_ALLOWED_ORIGINS`. **Breaking:** em produção é obrigatório definir `CORS_ALLOWED_ORIGINS` antes do deploy.
+- **Inflação de XP na submissão de quiz:** respostas repetidas à mesma pergunta contavam várias vezes (ex.: 1 pergunta respondida 100 vezes dava 250 XP). A submissão com perguntas repetidas passa a ser rejeitada com `400` e não cria submissão.
+- **Throttling** em `POST /api/auth/login/` (30/min por IP e 5/min por conta), `POST /api/auth/register/` (10/hora por IP) e `POST /api/auth/token/refresh/` (30/min por IP). Acima do limite: `429`. Valores provisórios; a cache é local a cada processo. `DRF_NUM_PROXIES` opcional para ler o IP do cliente em `X-Forwarded-For`.
+
+### Testes
+
+- Rejeição de respostas repetidas na submissão de quiz.
+- Throttling de login (por IP e por conta), registo e refresh; `conftest.py` limpa a cache entre testes.
+
+---
+
 ## [2.7.0] - Geração de Quiz OpenTDB (10 de Junho 2026)
 
 ### Corrigido
