@@ -1,8 +1,18 @@
+from unittest.mock import patch
+
+from django.conf import settings
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
 from apps.accounts.models import CustomUser
+from apps.accounts.throttles import (
+    LoginIdentifierRateThrottle,
+    LoginRateThrottle,
+    RegisterRateThrottle,
+    TokenRefreshRateThrottle,
+)
 from apps.contents.models import Content
 from apps.quizzes.models import Quiz, QuizSubmission
 from apps.rankings.services import record_xp
@@ -315,3 +325,58 @@ class LearnerCoursesAPITest(APITestCase):
         self.client.force_authenticate(user=self.learner)
         response = self.client.get(self.url)
         self.assertEqual(response.data, [])
+
+
+class AuthThrottlingTest(APITestCase):
+    """Throttling de login, registo e refresh (taxas reduzidas nos testes)."""
+
+    def setUp(self):
+        cache.clear()
+        self.login_url = reverse("auth_login")
+        self.register_url = reverse("auth_register")
+        self.refresh_url = reverse("token_refresh")
+
+    def test_throttle_rates_are_configured(self):
+        rates = settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        for scope in ("login", "login_identifier", "register", "token_refresh"):
+            self.assertIn(scope, rates)
+
+    @patch.object(LoginRateThrottle, "rate", "2/min", create=True)
+    def test_login_is_throttled_per_ip(self):
+        for _ in range(2):
+            response = self.client.post(self.login_url, {})
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        response = self.client.post(self.login_url, {})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    @patch.object(LoginIdentifierRateThrottle, "rate", "2/min", create=True)
+    def test_login_is_throttled_per_account(self):
+        data = {"email": "alvo@example.com", "password": "errada"}
+        for _ in range(2):
+            response = self.client.post(self.login_url, data)
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        response = self.client.post(
+            self.login_url, {"email": " ALVO@example.com ", "password": "errada"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        # Outra conta, mesmo IP: não fica bloqueada pelo limite por conta.
+        response = self.client.post(
+            self.login_url, {"email": "outra@example.com", "password": "errada"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch.object(RegisterRateThrottle, "rate", "2/min", create=True)
+    def test_register_is_throttled(self):
+        for _ in range(2):
+            response = self.client.post(self.register_url, {})
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(self.register_url, {})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    @patch.object(TokenRefreshRateThrottle, "rate", "2/min", create=True)
+    def test_token_refresh_is_throttled(self):
+        for _ in range(2):
+            response = self.client.post(self.refresh_url, {"refresh": "invalido"})
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        response = self.client.post(self.refresh_url, {"refresh": "invalido"})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

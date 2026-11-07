@@ -45,6 +45,12 @@ class QuizSubmissionSerializer(serializers.Serializer):
     def validate(self, data):
         if not data.get('answers'):
             raise serializers.ValidationError("At least one answer is required.")
+        # Uma resposta por pergunta: respostas repetidas inflacionavam o XP.
+        question_ids = [answer["question_id"] for answer in data["answers"]]
+        if len(question_ids) != len(set(question_ids)):
+            raise serializers.ValidationError(
+                "Each question can only be answered once per submission."
+            )
         return data
 
 

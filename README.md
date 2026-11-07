@@ -84,7 +84,13 @@ Antes de iniciar, certifique-se de ter instalado:
    # - SECRET_KEY (gere uma nova chave)
    # - DEBUG=True (para desenvolvimento)
    # - ALLOWED_HOSTS=localhost,127.0.0.1
+   # - CORS_ALLOWED_ORIGINS=http://localhost:5173 (CORS fechado por omissão)
    ```
+
+   Em produção (`DEBUG=False`) a app assume que está atrás de um proxy que
+   termina o TLS e envia `X-Forwarded-Proto` (caso do Render): redirecciona
+   para HTTPS, envia HSTS (`SECURE_HSTS_SECONDS`, 3600 por omissão) e marca
+   as cookies como seguras. Ver `.env.example` para todas as variáveis.
 
 4. **Instale as dependências:**
 
@@ -191,6 +197,11 @@ backend/
 | `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
 | `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
+
+**Limites de pedidos (provisórios):** login 30/min por IP e 5/min por conta;
+registo 10/hora por IP; refresh 30/min por IP. Acima do limite a API devolve
+`429 Too Many Requests`. Na submissão de quiz, cada pergunta só pode ser
+respondida uma vez por pedido (respostas repetidas devolvem `400`).
 
 ### Documentação
 
