@@ -166,6 +166,49 @@ class TenantIsolationTests(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(Content.objects.filter(title="Nope").exists())
 
+    # --- organizacao só de leitura ---------------------------------------
+    def test_create_ignores_organizacao_in_body(self):
+        self.client.force_authenticate(self.teacher_a)
+        payload = {
+            "title": "Infiltrado",
+            "description": "d",
+            "category": "design",
+            "organizacao": str(self.org_b.id),
+        }
+        r = self.client.post(
+            reverse("content-list"), payload, format="json", **self._hdr(self.org_a)
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            Content.objects.get(title="Infiltrado").organizacao_id, self.org_a.id
+        )
+
+    def test_owner_cannot_move_content_to_other_organization(self):
+        self.client.force_authenticate(self.teacher_a)
+        url = reverse("content-detail", args=[self.content_a.id])
+        hdr = self._hdr(self.org_a)
+        self.client.patch(url, {"organizacao": str(self.org_b.id)}, format="json", **hdr)
+        self.client.patch(url, {"organizacao": None}, format="json", **hdr)
+        self.content_a.refresh_from_db()
+        self.assertEqual(self.content_a.organizacao_id, self.org_a.id)
+        # E não aparece na escola B nem no marketplace.
+        self.assertNotIn("Conteúdo A", self._titles(self.teacher_b, self.org_b))
+        self.assertNotIn("Conteúdo A", self._titles(self.market_learner))
+
+    def test_put_cannot_move_content_to_other_organization(self):
+        self.client.force_authenticate(self.teacher_a)
+        url = reverse("content-detail", args=[self.content_a.id])
+        payload = {
+            "title": "Conteúdo A",
+            "description": "d",
+            "category": "design",
+            "organizacao": str(self.org_b.id),
+        }
+        r = self.client.put(url, payload, format="json", **self._hdr(self.org_a))
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.content_a.refresh_from_db()
+        self.assertEqual(self.content_a.organizacao_id, self.org_a.id)
+
     # --- quizzes -------------------------------------------------------
     def test_quiz_detail_cross_organization_is_404(self):
         self.client.force_authenticate(self.student_a)

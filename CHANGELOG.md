@@ -5,6 +5,19 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Organização do conteúdo só de leitura
+
+### Segurança
+
+- **Fuga entre tenants em `PUT`/`PATCH /api/contents/<id>/`:** o campo `organizacao` era editável, e o criador podia mover o seu conteúdo para uma organização onde não tem `Membership` (ou para o marketplace). Passa a ser só de leitura: vem sempre do workspace activo na criação e é ignorado no corpo de `POST`, `PUT` e `PATCH`. No schema da API passa a `readOnly` na resposta e sai de `ContentRequest`/`PatchedContentRequest`.
+- Revisto o mesmo risco em Quiz, Trilha e Enquete: não há endpoints de edição, os serializers não expõem `organizacao` para escrita e a criação usa sempre o workspace activo.
+
+### Testes
+
+- Isolamento: criar com `organizacao` de outra escola no corpo, mover por `PATCH` (outra escola e `null`) e por `PUT`. O conteúdo fica na escola de origem e não aparece na outra escola nem no marketplace.
+
+---
+
 ## [Não Lançado] - Ranking por workspace (R4)
 
 ### Alterado
