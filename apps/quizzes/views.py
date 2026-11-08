@@ -14,7 +14,7 @@ from apps.contents.models import Content
 from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
 from apps.rankings.models import XPEvent
 from apps.rankings.services import record_xp
-from apps.tenancy.scoping import WorkspaceScopedMixin
+from apps.tenancy.scoping import WorkspaceScopedMixin, can_create_in
 from apps.trilhas.services import on_quiz_submitted
 
 
@@ -37,7 +37,7 @@ class QuizGenerationView(WorkspaceScopedMixin, APIView):
 
     def post(self, request, content_id):
         # Verifica se o usuário é um criador
-        if request.user.user_type != "creator":
+        if not can_create_in(request.user, self.workspace):
             return Response(
                 {"error": "Only creators can generate quizzes."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -90,7 +90,7 @@ class QuizManualCreationView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, content_id):
-        if request.user.user_type != "creator":
+        if not can_create_in(request.user, self.workspace):
             return Response(
                 {"error": "Only creators can create quizzes."},
                 status=status.HTTP_403_FORBIDDEN,

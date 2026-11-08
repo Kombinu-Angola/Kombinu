@@ -166,6 +166,71 @@ class TenantIsolationTests(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(Content.objects.filter(title="Nope").exists())
 
+    # --- papel de criador (D11) --------------------------------------------
+    def _manual_quiz(self, user, content, org):
+        self.client.force_authenticate(user)
+        body = {"questions": [{"question": "2+2?", "options": ["4", "5"], "correctAnswer": 0}]}
+        return self.client.post(
+            reverse("quiz-manual-create", args=[content.id]),
+            body,
+            format="json",
+            **self._hdr(org),
+        )
+
+    def test_teacher_with_learner_type_creates_inside_own_school_only(self):
+        prof = make_user("prof-learner@test.com")  # user_type learner
+        Membership.objects.create(user=prof, organizacao=self.org_a, role="teacher")
+        self.client.force_authenticate(prof)
+        payload = {"title": "Aula", "description": "d", "category": "design"}
+
+        r = self.client.post(
+            reverse("content-list"), payload, format="json", **self._hdr(self.org_a)
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        content = Content.objects.get(title="Aula")
+        self.assertEqual(content.organizacao_id, self.org_a.id)
+        self.assertEqual(
+            self._manual_quiz(prof, content, self.org_a).status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        # Noutra escola não tem Membership; no marketplace não é creator.
+        r = self.client.post(
+            reverse("content-list"), payload, format="json", **self._hdr(self.org_b)
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        r = self.client.post(reverse("content-list"), payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_creator_demoted_to_student_cannot_create_quiz_in_school(self):
+        Membership.objects.filter(user=self.teacher_a, organizacao=self.org_a).update(
+            role="student"
+        )
+        content = make_content(self.teacher_a, "Sem quiz", self.org_a)
+        self.assertEqual(
+            self._manual_quiz(self.teacher_a, content, self.org_a).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.client.force_authenticate(self.teacher_a)
+        r = self.client.post(
+            reverse("quiz-generate", args=[content.id]),
+            {"difficulty": "easy"},
+            format="json",
+            **self._hdr(self.org_a),
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_marketplace_creation_still_requires_creator_type(self):
+        content = make_content(self.market_creator, "Mkt sem quiz")
+        self.assertEqual(
+            self._manual_quiz(self.market_creator, content, None).status_code,
+            status.HTTP_201_CREATED,
+        )
+        self.client.force_authenticate(self.market_learner)
+        payload = {"title": "Nope", "description": "d", "category": "design"}
+        r = self.client.post(reverse("content-list"), payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
     # --- organizacao só de leitura ---------------------------------------
     def test_create_ignores_organizacao_in_body(self):
         self.client.force_authenticate(self.teacher_a)
