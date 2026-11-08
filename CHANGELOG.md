@@ -5,6 +5,31 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Auth institucional (5/6): provisionamento em lote
+
+### Adicionado
+
+- **`POST /api/tenancy/members/bulk/`** (D3 = P2, D4): o admin da organização do `X-Workspace` activo cria contas em lote: `{ dry_run, rows: [{ student_code, first_name, last_name, role, academic_year, faculty, course, email }] }`.
+  - **Tudo ou nada:** se alguma linha falhar, nada é criado e a resposta `400 { errors: [{ row, student_code, errors }] }` traz o detalhe. Com `dry_run`, só valida (`200`).
+  - Cada conta nasce na mesma transacção com a `Membership` (papel e dados académicos, `provisioned_by`/`provisioned_at`) e a auditoria em `ProvisionamentoLote`.
+  - **Password temporária** (D5): gerada com `secrets`, 10 caracteres sem ambíguos, válida 7 dias, troca obrigatória no 1.º acesso. Só aparece nesta resposta (com `Cache-Control: no-store`); não é gravada em claro nem registada em logs. `password` e `password_changed_at` são gravados juntos.
+  - O `student_code` é normalizado antes de qualquer validação ou escrita, e só aceita letras, números, `-`, `_`, `/` e `.`, porque também forma o email técnico `<aluno>@<escola>.kombinu.invalid`.
+  - Recusa números repetidos no lote ou já existentes na organização, emails já registados (D12), o domínio técnico e emails repetidos.
+  - O nome de exibição é o número de aluno quando a escola não manda nome.
+- **Limite do lote configurável:** `PROVISIONING_MAX_ROWS` (20 por omissão; ver `.env.example`). Cada conta custa um hash PBKDF2 (cerca de 5,4 s medidos na máquina de desenvolvimento) e o lote tem de caber no timeout do worker. O valor final (D4 previa 100) depende de um benchmark no servidor. Throttle `provisioning`: 30/hora por utilizador (provisório).
+- **`manage.py criar_admin_organizacao <slug|código> --email …`:** cria o 1.º admin de uma organização (D3, bootstrap), com password temporária mostrada uma vez na saída do comando.
+
+### Testes
+
+- 17 testes novos (`apps/tenancy/test_provisionamento.py`). Isolamento:
+  - o admin da escola A com `X-Workspace` da escola B → 403;
+  - marketplace → 403;
+  - professor, aluno e admin inactivo → 403;
+  - cada admin só cria na sua escola.
+- Também: lote atómico, erros por linha, `dry_run`, limite do lote, login institucional da conta criada, email real opcional, passwords fora dos logs e o comando do 1.º admin.
+
+---
+
 ## [Não Lançado] - Auth institucional (4/6): login, troca obrigatória e troca de password
 
 ### Adicionado
