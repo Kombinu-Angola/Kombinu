@@ -1,8 +1,8 @@
 # Kombinu - Plataforma Educacional
 
 [![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/downloads/)
-[![Django](https://img.shields.io/badge/django-4.2+-green.svg)](https://www.djangoproject.com/)
+[![Python](https://img.shields.io/badge/python-3.13-green.svg)](https://www.python.org/downloads/)
+[![Django](https://img.shields.io/badge/django-5.2_LTS-green.svg)](https://www.djangoproject.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Sistema Django com API REST para gestão de conteúdos educacionais, quizzes interativos, rankings e gamificação.
@@ -51,8 +51,8 @@ A aplicação está disponível online em: **[https://kombinu.onrender.com](http
 
 Antes de iniciar, certifique-se de ter instalado:
 
-- Python 3.8+
-- Django 4+
+- Python 3.13 (fixado em `.python-version`, que o Render lê no build)
+- Django 5.2 LTS (suporte até Abril de 2028)
 - Django REST Framework
 - Pip e virtualenv (recomendado)
 
@@ -260,7 +260,7 @@ Você também pode acessar a documentação interativa através das rotas:
 
 ## Tecnologias Utilizadas
 
-- **Backend**: Django 4+, Django REST Framework
+- **Backend**: Django 5.2 LTS, Django REST Framework
 - **Banco de Dados**: SQLite (desenvolvimento) / PostgreSQL (produção)
 - **Autenticação**: Token-based authentication
 - **Documentação**: drf-spectacular (OpenAPI/Swagger)

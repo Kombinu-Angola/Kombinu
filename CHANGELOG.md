@@ -5,6 +5,22 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Django 5.2 LTS
+
+### Alterado
+
+- **Django 4.2 → 5.2 LTS** em `requirements.txt` (`Django>=5.2,<5.3`). O 4.2 está fora de suporte desde Abril de 2026; o 5.2 tem suporte até Abril de 2028. As outras dependências ficam alinhadas com o ambiente onde a suite já passava: DRF ≥3.16, simplejwt ≥5.5, django-cors-headers ≥4.9, drf-spectacular ≥0.28, django-filter 25.x, whitenoise ≥6.11, psycopg2-binary ≥2.9.10 (rodas para Python 3.13), dj-database-url ≥2.3, pytest 9, pytest-django ≥4.11, black 25.
+- **gunicorn 21 → 23** (o 21 tem a vulnerabilidade de *request smuggling* CVE-2024-1135, corrigida no 22).
+- **Python 3.13 fixado** em `.python-version`, que o Render lê no build.
+- **`STATICFILES_STORAGE` → `STORAGES`:** o setting antigo deixou de existir no Django 5.1 e seria ignorado em silêncio, e o whitenoise perdia a compressão e o manifest. O comportamento em produção mantém-se.
+- `TrilhaItem`: `CheckConstraint(check=…)` → `condition=…` (o `check` sai no Django 6.0). Sem migração nova.
+
+### Corrigido
+
+- **`develop` não fazia deploy no Render:** a migração `trilhas/0001_initial` usa `CheckConstraint(condition=…)`, que não existe no Django 4.2, e o `migrate` do `build.sh` falhava com `TypeError`.
+
+---
+
 ## [Não Lançado] - Organização do conteúdo só de leitura
 
 ### Segurança

@@ -95,7 +95,7 @@ class TrilhaItem(models.Model):
             # Exactamente um alvo, coerente com `kind`.
             models.CheckConstraint(
                 name="trilhaitem_single_target_matches_kind",
-                check=(
+                condition=(
                     Q(
                         kind="conteudo",
                         content__isnull=False,
