@@ -256,7 +256,9 @@ from datetime import timedelta
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ROTATE_REFRESH_TOKENS": False,
+    # D7: cada refresh devolve também um refresh novo. Sem blacklist: o
+    # anterior vale até expirar, salvo troca de password (password_changed_at).
+    "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": False,
     "ALGORITHM": "HS256",
