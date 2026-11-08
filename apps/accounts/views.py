@@ -18,6 +18,9 @@ from .throttles import (
 
 
 class RegisterView(APIView):
+    # Sem autenticação: um Bearer expirado ou inválido no pedido não pode
+    # impedir o login nem o registo.
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [RegisterRateThrottle]
 
@@ -85,6 +88,9 @@ class RegisterView(APIView):
 
 
 class LoginView(APIView):
+    # Sem autenticação: um Bearer expirado ou inválido no pedido não pode
+    # impedir o login nem o registo.
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle, LoginIdentifierRateThrottle]
 
