@@ -191,7 +191,7 @@ backend/
 | --- | --- | --- |
 | `/api/auth/register/` | POST | Registo de utilizadores |
 | `/api/auth/login/` | POST | Login — devolve access + refresh JWT |
-| `/api/auth/token/refresh/` | POST | Renovar access token sem novo login (401 `token_not_valid` se a password mudou depois de o refresh ser emitido) |
+| `/api/auth/token/refresh/` | POST | `{ refresh }` → `{ access, refresh }`: novo access e novo refresh (guardar os dois). 401 `token_not_valid` se a password mudou depois de o refresh ser emitido |
 | `/api/auth/profile/` | GET | Perfil com nome, pontos (XP) e nível |
 | `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
 | `/api/dashboard/learner/courses/` | GET | Cursos frequentados |
