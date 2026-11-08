@@ -145,6 +145,12 @@ pytest apps/quizzes/tests.py
 pytest --cov=apps
 ```
 
+O `pytest` usa `core/settings_test.py` (definido no `pytest.ini`), que herda
+de `core/settings.py` e só troca o hasher de passwords por MD5 para a suite
+correr rápido. Esse ficheiro nunca é carregado em produção: `manage.py`, WSGI
+e ASGI usam `core.settings`. Com `python manage.py test` o hasher é o real
+(PBKDF2) e a suite fica muito mais lenta.
+
 ### Cobertura de Testes
 
 - **accounts**: 20 testes (autenticação, perfil com XP/nível, dashboard stats, cursos do aprendiz, token refresh)

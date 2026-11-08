@@ -5,6 +5,18 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Suite de testes rápida e teste instável
+
+### Alterado
+
+- **Hasher rápido só nos testes:** novo `core/settings_test.py`, que herda de `core/settings.py` e só troca `PASSWORD_HASHERS` por MD5; o `pytest.ini` passa a usá-lo. `manage.py`, WSGI e ASGI continuam em `core.settings`, por isso produção mantém o PBKDF2. Suite completa (167 testes, mesma máquina e mesmo venv): **47m00s → 1m40s** no tempo do pytest.
+
+### Corrigido
+
+- **Teste instável `test_other_school_users_never_leak_into_response`:** procurava `"99"` na resposta inteira e falhava em cerca de 11% das execuções, quando o UUID aleatório do workspace continha `99`. Passa a comparar `user_id`, `total_score`, `user_position` e `count`.
+
+---
+
 ## [Não Lançado] - Django 5.2 LTS
 
 ### Alterado
