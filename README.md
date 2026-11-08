@@ -190,7 +190,9 @@ backend/
 | Rota | Método | Descrição |
 | --- | --- | --- |
 | `/api/auth/register/` | POST | Registo de utilizadores |
-| `/api/auth/login/` | POST | Login — devolve access + refresh JWT |
+| `/api/auth/login/` | POST | Login por email — devolve `access_token`, `refresh_token` e `user` (com `memberships` e `must_change_password`) |
+| `/api/auth/institutional/login/` | POST | Login institucional: `{ school_code, student_code, password }` (`school_code` = código de 6 caracteres da escola, não o UUID). Mesmo envelope; qualquer falha → 401 igual |
+| `/api/auth/password/change/` | POST | `{ current_password, new_password }` → novos `access_token`/`refresh_token`; os anteriores deixam de valer |
 | `/api/auth/token/refresh/` | POST | Renovar access token sem novo login (401 `token_not_valid` se a password mudou depois de o refresh ser emitido) |
 | `/api/auth/profile/` | GET | Perfil com nome, pontos (XP) e nível |
 | `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
@@ -207,7 +209,12 @@ backend/
 **Limites de pedidos (provisórios):** login 30/min por IP e 5/min por conta;
 registo 10/hora por IP; refresh 30/min por IP. Acima do limite a API devolve
 `429 Too Many Requests`. Na submissão de quiz, cada pergunta só pode ser
-respondida uma vez por pedido (respostas repetidas devolvem `400`).
+respondida uma vez por pedido (respostas repetidas devolvem `400`). A troca de
+password está limitada a 10/hora por utilizador (provisório).
+
+**Troca obrigatória:** enquanto `user.must_change_password` for `true`, qualquer
+endpoint autenticado devolve `403 { "detail", "code": "password_change_required" }`,
+excepto `POST /api/auth/password/change/` e o refresh do token.
 
 ### Documentação
 

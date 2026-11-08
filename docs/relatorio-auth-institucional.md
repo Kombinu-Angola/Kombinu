@@ -218,6 +218,32 @@ Sem infra de email, **não há recuperação self-service** para contas de forma
 
 ---
 
+### 5.4 Contrato aprovado (CTO, Novembro de 2026; implementado na etapa 4)
+
+Ajustes do CTO à proposta: **snake_case** em todas as chaves novas, como o resto da API; nome de exibição sempre presente; rotação do refresh aprovada.
+
+| Endpoint | Pedido | Resposta |
+|---|---|---|
+| `POST /api/auth/institutional/login/` | `{ school_code, student_code, password }`, onde `school_code` é o `Organizacao.code` (6 caracteres), **não o UUID** | `200 { access_token, refresh_token, user }`; qualquer falha → `401 { "error": "Invalid credentials." }` igual; `429` por throttling |
+| `POST /api/auth/login/` | sem mudanças | o `user` ganha os campos abaixo |
+| `POST /api/auth/password/change/` (autenticado) | `{ current_password, new_password }` | `200 { access_token, refresh_token }` (os anteriores deixam de valer); `400` com erros em `current_password` ou `new_password` |
+| `POST /api/auth/token/refresh/` | `{ refresh }` | `{ access, refresh }` (rotação, sem blacklist); `401 token_not_valid` se a password mudou depois da emissão |
+
+Campos novos no `user` dos dois logins:
+- `must_change_password` (bool);
+- `memberships: [{ organizacao_id, name, code, role }]`, só as activas em organizações activas;
+- `email`: `null` nas contas com email técnico (`*.kombinu.invalid`);
+- `first_name`: nunca vazio nas contas institucionais, com o `student_code` como fallback (o mesmo para `nome`).
+
+Gate (D6): enquanto `must_change_password` for `true`, qualquer endpoint autenticado responde `403 { "detail", "code": "password_change_required" }`, excepto a troca de password e o refresh. O login e o registo ignoram o header `Authorization`, por isso um token antigo não bloqueia um novo login.
+
+Regras do login institucional:
+- escola inactiva, conta inactiva ou password temporária expirada → 401 igual aos outros;
+- `Membership` inactiva (aluno que saiu, D13) → login permitido, sem essa escola em `memberships`;
+- quando a conta não existe, o hash da password corre na mesma, para o tempo de resposta não revelar se existe.
+
+---
+
 ## 6. Ciclo de vida
 
 ### 6.1 Professores e admins
