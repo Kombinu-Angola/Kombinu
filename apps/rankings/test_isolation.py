@@ -96,9 +96,14 @@ class RankingIsolationTests(RankingIsolationBase):
         self.xp(self.carla, 99, self.org_b)
         self.xp(self.ana, 1, self.org_a)
         data = self.ranking(self.ana, **self.hdr_a)
+        # Compara campos: procurar "99" na resposta inteira falhava quando o
+        # UUID aleatório do workspace continha "99".
+        self.assertEqual([u["user_id"] for u in data["top_users"]], [self.ana.id])
+        self.assertEqual([u["total_score"] for u in data["top_users"]], [1])
+        self.assertEqual(data["user_position"], {"position": 1, "total_score": 1})
+        self.assertEqual(data["count"], 1)
         blob = str(data)
         self.assertNotIn("Carla", blob)
-        self.assertNotIn("99", blob)
         self.assertNotIn("@", blob)
 
     def test_empty_workspace(self):
