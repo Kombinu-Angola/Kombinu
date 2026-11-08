@@ -6,6 +6,8 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from apps.accounts.models import CustomUser
 from apps.accounts.throttles import (
     LoginIdentifierRateThrottle,
@@ -367,3 +369,48 @@ class AuthThrottlingTest(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         response = self.client.post(self.refresh_url, {"refresh": "invalido"})
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class StaleBearerOnPublicAuthEndpointsTest(APITestCase):
+    """Um Bearer expirado ou inválido no header não bloqueia login, registo nem refresh."""
+
+    STALE = {"HTTP_AUTHORIZATION": "Bearer expirado.invalido.x"}
+
+    def setUp(self):
+        cache.clear()
+        self.user = CustomUser.objects.create_user(
+            username="velho@example.com",
+            email="velho@example.com",
+            password="velhopass123",
+            user_type="learner",
+        )
+
+    def test_login_with_stale_bearer_succeeds(self):
+        r = self.client.post(
+            reverse("auth_login"),
+            {"email": "velho@example.com", "password": "velhopass123"},
+            **self.STALE,
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIn("access_token", r.data)
+
+    def test_register_with_stale_bearer_succeeds(self):
+        r = self.client.post(
+            reverse("auth_register"),
+            {
+                "email": "novo@example.com",
+                "password": "novopass12345",
+                "user_type": "learner",
+            },
+            **self.STALE,
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+
+    def test_refresh_with_stale_bearer_succeeds(self):
+        refresh = str(RefreshToken.for_user(self.user))
+        r = self.client.post(reverse("token_refresh"), {"refresh": refresh}, **self.STALE)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_protected_endpoint_still_rejects_stale_bearer(self):
+        r = self.client.get(reverse("learner-stats"), **self.STALE)
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
