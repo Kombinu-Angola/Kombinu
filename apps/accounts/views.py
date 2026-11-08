@@ -9,7 +9,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from .authentication import REVOKED_MESSAGE, issued_before_password_change
 from .models import CustomUser
-from .institutional import authenticate_institutional
+from .institutional import (
+    authenticate_institutional,
+    is_technical_email,
+    temp_password_expired,
+)
 from .serializers import (
     InstitutionalLoginSerializer,
     LoginResponseSerializer,
@@ -154,8 +158,13 @@ class LoginView(APIView):
 
         email = request.data.get("email")
         password = request.data.get("password")
+        if not isinstance(email, str) or is_technical_email(email):
+            # As contas institucionais só entram pelo login institucional:
+            # o email técnico é previsível e não pode ser uma porta paralela.
+            CustomUser().set_password(password if isinstance(password, str) else "")
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         user_instance = authenticate(request, username=email, password=password)
-        if user_instance is None:
+        if user_instance is None or temp_password_expired(user_instance):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         return login_response(user_instance)
 

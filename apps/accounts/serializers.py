@@ -21,6 +21,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ("email", "password", "user_type", "first_name", "last_name")
 
     def validate_email(self, value):
+        # O domínio técnico é reservado às contas institucionais (D1/D12).
+        if is_technical_email(value):
+            raise serializers.ValidationError("Enter a valid email address.")
         if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value

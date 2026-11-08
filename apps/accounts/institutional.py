@@ -14,7 +14,16 @@ TECHNICAL_EMAIL_DOMAIN = "kombinu.invalid"
 
 
 def is_technical_email(email):
-    return (email or "").lower().endswith("." + TECHNICAL_EMAIL_DOMAIN)
+    return (email or "").strip().lower().endswith("." + TECHNICAL_EMAIL_DOMAIN)
+
+
+def temp_password_expired(user):
+    """Regra única (D5), aplicada aos dois logins."""
+    return (
+        user.must_change_password
+        and user.temp_password_expires_at is not None
+        and user.temp_password_expires_at < timezone.now()
+    )
 
 
 def authenticate_institutional(school_code, student_code, password):
@@ -44,10 +53,6 @@ def authenticate_institutional(school_code, student_code, password):
     user = membership.user
     if not user.check_password(password or "") or not user.is_active:
         return None
-    if (
-        user.must_change_password
-        and user.temp_password_expires_at is not None
-        and user.temp_password_expires_at < timezone.now()
-    ):
+    if temp_password_expired(user):
         return None
     return user

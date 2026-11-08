@@ -186,6 +186,63 @@ class EmailLoginContractTests(APITestCase):
         self.assertEqual(user["memberships"][0]["role"], "teacher")
         self.assertEqual(user["memberships"][0]["code"], self.org.code)
 
+    def test_technical_email_cannot_use_email_login(self):
+        aluno = make_student(self.org, "2024-001")
+        r = self.client.post(
+            reverse("auth_login"),
+            {"email": aluno.email, "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(r.data, {"error": "Invalid credentials."})
+        # Também com maiúsculas ou espaços à volta.
+        r = self.client.post(
+            reverse("auth_login"),
+            {"email": f"  {aluno.email.upper()} ", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_expired_temporary_password_cannot_use_email_login(self):
+        CustomUser.objects.filter(pk=self.prof.pk).update(
+            must_change_password=True,
+            temp_password_expires_at=timezone.now() - timedelta(minutes=1),
+        )
+        r = self.client.post(
+            reverse("auth_login"),
+            {"email": "prof@escola.ao", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(r.data, {"error": "Invalid credentials."})
+
+    def test_valid_temporary_password_on_email_login_requires_change(self):
+        CustomUser.objects.filter(pk=self.prof.pk).update(
+            must_change_password=True,
+            temp_password_expires_at=timezone.now() + timedelta(days=1),
+        )
+        r = self.client.post(
+            reverse("auth_login"),
+            {"email": "prof@escola.ao", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertTrue(r.data["user"]["must_change_password"])
+
+    def test_register_rejects_technical_email_domain(self):
+        r = self.client.post(
+            reverse("auth_register"),
+            {
+                "email": f"2024-999@{self.org.slug}.kombinu.invalid",
+                "password": "Registo-Valido-123",
+                "user_type": "learner",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", r.data)
+        self.assertFalse(CustomUser.objects.filter(email__endswith=".kombinu.invalid").exists())
+
     def test_email_login_ignores_stale_bearer_header(self):
         r = self.client.post(
             reverse("auth_login"),
