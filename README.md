@@ -111,6 +111,13 @@ Antes de iniciar, certifique-se de ter instalado:
    python manage.py createsuperuser
    ```
 
+   Para criar o 1.º admin de uma organização (escola), com password temporária
+   de troca obrigatória, mostrada uma única vez:
+
+   ```bash
+   python manage.py criar_admin_organizacao <slug-ou-código-da-escola> --email admin@escola.ao --first-name Nome
+   ```
+
 7. **Inicie o servidor:**
 
    ```bash
@@ -205,6 +212,7 @@ backend/
 | `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
 | `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
+| `/api/tenancy/members/bulk/` | POST | Provisionamento em lote pelo admin da organização do `X-Workspace`: `{ dry_run, rows: [{ student_code, first_name, last_name, role, academic_year, faculty, course, email }] }`. Tudo ou nada, até `PROVISIONING_MAX_ROWS` linhas (20 por omissão); devolve as passwords temporárias uma única vez |
 
 **Limites de pedidos (provisórios):** login 30/min por IP e 5/min por conta;
 registo 10/hora por IP; refresh 30/min por IP. Acima do limite a API devolve

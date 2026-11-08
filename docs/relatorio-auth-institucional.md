@@ -148,6 +148,8 @@ O Django 5.2 usa PBKDF2 com cerca de 1,2 milhões de iterações. Nos testes loc
 
 Opções: limitar o lote a um valor medido; processar em *chunks* com resposta por partes; ou trabalho em segundo plano com consulta de estado (mais infra). **Pedir benchmark em produção antes de fixar o limite (D4).**
 
+**Medido (Novembro de 2026, etapa 5):** nesta máquina de desenvolvimento (Windows, Django 5.2, PBKDF2 com 1 000 000 de iterações), cada hash custou **cerca de 5,4 s**. Em Linux no Render deve ser bem menos, mas não foi medido. Como o gunicorn mata o worker aos 30 s por omissão, um lote de 100 linhas (o valor de D4) arrisca o timeout. O limite passa a ser configurável (`PROVISIONING_MAX_ROWS`, **20 por omissão**) até haver benchmark no servidor; o CTO decide o valor final.
+
 ---
 
 ## 4. Primeiro acesso e segurança
