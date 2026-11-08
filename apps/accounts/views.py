@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.settings import api_settings as jwt_settings
@@ -9,15 +9,26 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from .authentication import REVOKED_MESSAGE, issued_before_password_change
 from .models import CustomUser
-from .serializers import UserProfileSerializer, UserRegistrationSerializer
+from .institutional import authenticate_institutional
+from .serializers import (
+    InstitutionalLoginSerializer,
+    LoginResponseSerializer,
+    PasswordChangeSerializer,
+    TokenPairResponseSerializer,
+    UserProfileSerializer,
+    UserRegistrationSerializer,
+)
 from .throttles import (
+    InstitutionalLoginIdentifierRateThrottle,
     LoginIdentifierRateThrottle,
     LoginRateThrottle,
+    PasswordChangeRateThrottle,
     RegisterRateThrottle,
 )
 
 
 class RegisterView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [RegisterRateThrottle]
 
@@ -84,13 +95,41 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+INVALID_CREDENTIALS = {"error": "Invalid credentials."}
+
+_INVALID_CREDENTIALS_RESPONSE = OpenApiResponse(
+    response={
+        "type": "object",
+        "properties": {"error": {"type": "string", "example": "Invalid credentials."}},
+    },
+    description="Credenciais inválidas",
+)
+
+
+def login_response(user):
+    refresh = RefreshToken.for_user(user)
+    return Response(
+        {
+            "access_token": str(refresh.access_token),
+            "refresh_token": str(refresh),
+            "user": UserProfileSerializer(user).data,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 class LoginView(APIView):
+    # Sem autenticação: um Bearer expirado no pedido não pode impedir o login.
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle, LoginIdentifierRateThrottle]
 
     @extend_schema(
         summary="Autenticar usuário",
-        description="Realiza login do usuário e retorna tokens JWT de acesso e refresh.",
+        description=(
+            "Login por email e password. Devolve tokens JWT e o perfil, com "
+            "`memberships` (workspaces activos) e `must_change_password`."
+        ),
         request={
             "type": "object",
             "properties": {
@@ -107,51 +146,7 @@ class LoginView(APIView):
             },
             "required": ["email", "password"],
         },
-        responses={
-            200: OpenApiResponse(
-                response={
-                    "type": "object",
-                    "properties": {
-                        "access_token": {
-                            "type": "string",
-                            "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-                        },
-                        "refresh_token": {
-                            "type": "string",
-                            "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-                        },
-                        "user": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer", "example": 1},
-                                "email": {
-                                    "type": "string",
-                                    "format": "email",
-                                    "example": "user@example.com",
-                                },
-                                "first_name": {"type": "string", "example": "João"},
-                                "last_name": {"type": "string", "example": "Silva"},
-                                "date_joined": {
-                                    "type": "string",
-                                    "format": "date-time",
-                                    "example": "2023-01-01T10:00:00Z",
-                                },
-                            },
-                        },
-                    },
-                },
-                description="Login realizado com sucesso",
-            ),
-            401: OpenApiResponse(
-                response={
-                    "type": "object",
-                    "properties": {
-                        "error": {"type": "string", "example": "Invalid credentials."}
-                    },
-                },
-                description="Credenciais inválidas",
-            ),
-        },
+        responses={200: LoginResponseSerializer, 401: _INVALID_CREDENTIALS_RESPONSE},
         tags=["Autenticação"],
     )
     def post(self, request):
@@ -160,21 +155,79 @@ class LoginView(APIView):
         email = request.data.get("email")
         password = request.data.get("password")
         user_instance = authenticate(request, username=email, password=password)
-        if user_instance is not None:
-            refresh = RefreshToken.for_user(user_instance)
-            user_serializer = UserProfileSerializer(user_instance)
-            return Response(
-                {
-                    "access_token": str(refresh.access_token),
-                    "refresh_token": str(refresh),
-                    "user": user_serializer.data,
-                },
-                status=status.HTTP_200_OK,
-            )
-        else:
-            return Response(
-                {"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED
-            )
+        if user_instance is None:
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+        return login_response(user_instance)
+
+
+class InstitutionalLoginView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle, InstitutionalLoginIdentifierRateThrottle]
+
+    @extend_schema(
+        summary="Login institucional",
+        description=(
+            "Login com o código da escola (`Organizacao.code`, 6 caracteres; "
+            "não o UUID), o número de aluno e a password. Mesmo envelope do "
+            "login por email. Qualquer falha devolve o mesmo 401."
+        ),
+        request=InstitutionalLoginSerializer,
+        responses={200: LoginResponseSerializer, 401: _INVALID_CREDENTIALS_RESPONSE},
+        tags=["Autenticação"],
+    )
+    def post(self, request):
+        serializer = InstitutionalLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+        data = serializer.validated_data
+        user = authenticate_institutional(
+            data["school_code"], data["student_code"], data["password"]
+        )
+        if user is None:
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+        return login_response(user)
+
+
+class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [PasswordChangeRateThrottle]
+    # Única view acessível enquanto a troca obrigatória está pendente (D6).
+    password_change_exempt = True
+
+    @extend_schema(
+        summary="Trocar password",
+        description=(
+            "Troca a password da conta autenticada (obrigatória no 1.º acesso "
+            "das contas institucionais). Devolve tokens novos; os anteriores "
+            "deixam de valer."
+        ),
+        request=PasswordChangeSerializer,
+        responses={
+            200: TokenPairResponseSerializer,
+            400: OpenApiResponse(
+                description=(
+                    "Erros por campo em `current_password` (errada) ou "
+                    "`new_password` (igual à actual ou recusada pelos validators)."
+                )
+            ),
+        },
+        tags=["Autenticação"],
+    )
+    def post(self, request):
+        user = request.user
+        serializer = PasswordChangeSerializer(data=request.data, context={"user": user})
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data["new_password"])
+        user.must_change_password = False
+        user.temp_password_expires_at = None
+        # Grava password e password_changed_at juntos (revoga as sessões).
+        user.save()
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {"access_token": str(refresh.access_token), "refresh_token": str(refresh)},
+            status=status.HTTP_200_OK,
+        )
 
 
 class PasswordAwareTokenRefreshView(TokenRefreshView):
@@ -200,7 +253,6 @@ class PasswordAwareTokenRefreshView(TokenRefreshView):
         return super().post(request, *args, **kwargs)
 
 
-from rest_framework.permissions import IsAuthenticated
 from apps.contents.models import Content
 from apps.quizzes.models import QuizSubmission
 from apps.rankings import selectors as xp
