@@ -178,6 +178,7 @@ Opções: limitar o lote a um valor medido; processar em *chunks* com resposta p
 | S8 | **Adesão automática por domínio de email** (`Organizacao.domain`) permitiria a qualquer pessoa reclamar uma escola com um email não verificado | **Não implementar.** Sem verificação de email, não é seguro | — |
 | S9 | **Dados de menores.** Alunos podem ser menores; a conta guarda nome e código | Minimização: nenhum campo extra (sem data de nascimento, morada, telefone) | **Parecer legal pendente** (protecção de dados, como em D9 do relatório da Fase 1) |
 | S10 | **Email técnico exposto** em perfil/exportações revela estrutura de identificadores | Não devolver `email` técnico à UI | — |
+| S11 | **Sessão sem limite máximo** (D7, rotação sem blacklist): cada refresh emite um refresh novo válido por 1 dia, por isso uma sessão em uso nunca expira; um refresh roubado e usado com regularidade mantém o acesso, e o refresh antigo continua válido até expirar | Troca de password revoga todos os tokens (`password_changed_at`); desactivar a conta corta o acesso. **Mitigação futura:** `rest_framework_simplejwt.token_blacklist` com `BLACKLIST_AFTER_ROTATION` (app e tabelas novas) e/ou um limite absoluto de sessão (ex.: claim com a hora do login original, recusada ao fim de N dias) | Aceite pelo CTO em D7; rever antes do piloto com alunos reais |
 
 ### 4.3 Reset e recuperação
 
