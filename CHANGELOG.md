@@ -18,6 +18,12 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 - **`user.email` é `null` nas contas institucionais** (email técnico `*.kombinu.invalid`), e o email técnico nunca sai da API. **`first_name` e `nome`** usam o `student_code` como fallback nessas contas.
 
+### Segurança
+
+- **As contas institucionais só entram pelo login institucional:** `POST /api/auth/login/` recusa emails técnicos (`*.kombinu.invalid`, que são previsíveis) com o mesmo `401 Invalid credentials.`. Sem isto, a password temporária expirada continuava a dar acesso pelo login por email, e o throttling por conta tinha orçamento duplicado.
+- **Expiração da password temporária numa regra única** (`temp_password_expired`), aplicada aos dois logins.
+- **O registo aberto recusa o domínio técnico:** `POST /api/auth/register/` com um email `*.kombinu.invalid` → `400`. Impede que alguém ocupe antecipadamente o email técnico de um aluno e bloqueie o seu provisionamento.
+
 ### Corrigido
 
 - **Login e registo com um token antigo no header:** `POST /api/auth/login/` e `POST /api/auth/register/` devolviam `401 token_not_valid` quando o pedido trazia um Bearer expirado ou inválido, mesmo com credenciais certas. Passam a ignorar o header `Authorization` (`authentication_classes = []`). O refresh já não autenticava.

@@ -240,6 +240,8 @@ Gate (D6): enquanto `must_change_password` for `true`, qualquer endpoint autenti
 
 Regras do login institucional:
 - escola inactiva, conta inactiva ou password temporária expirada → 401 igual aos outros;
+- as contas com email técnico só entram pelo login institucional: `POST /api/auth/login/` recusa `*.kombinu.invalid` com o mesmo 401, e o registo aberto recusa esse domínio (400);
+- a expiração da password temporária é uma regra única, aplicada aos dois logins;
 - `Membership` inactiva (aluno que saiu, D13) → login permitido, sem essa escola em `memberships`;
 - quando a conta não existe, o hash da password corre na mesma, para o tempo de resposta não revelar se existe.
 
