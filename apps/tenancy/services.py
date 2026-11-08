@@ -17,7 +17,7 @@ from apps.accounts.institutional import (
 from apps.accounts.models import CustomUser
 
 from .codes import is_valid_student_code, normalize_student_code
-from .models import Membership, ProvisionamentoLote
+from .models import AuditoriaMembro, Membership, ProvisionamentoLote
 
 
 class ProvisioningError(Exception):
@@ -157,3 +157,108 @@ def provision_batch(*, organizacao, admin, rows):
                 }
             )
     return lote, accounts
+
+
+class MemberActionError(Exception):
+    """Acção de gestão recusada. `status` é o código HTTP sugerido."""
+
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.status = status
+
+
+def _audit(*, organizacao, actor, membership, action):
+    AuditoriaMembro.objects.create(
+        organizacao=organizacao, actor=actor, membership=membership, action=action
+    )
+
+
+def deactivate_member(*, admin, membership):
+    """
+    D13: a conta e o XP mantêm-se; só a pertença fica inactiva. Um admin não
+    se desactiva a si próprio e a organização nunca fica sem admin activo.
+    """
+    if membership.user_id == admin.pk:
+        raise MemberActionError("Não pode desactivar a sua própria pertença.")
+    with transaction.atomic():
+        membership = Membership.objects.select_for_update().get(pk=membership.pk)
+        if not membership.is_active:
+            return membership
+        if membership.role == "admin":
+            active_admins = list(
+                Membership.objects.select_for_update()
+                .filter(organizacao_id=membership.organizacao_id, role="admin", is_active=True)
+                .values_list("pk", flat=True)
+            )
+            if len(active_admins) <= 1:
+                raise MemberActionError("A organização tem de manter pelo menos um admin activo.")
+        membership.is_active = False
+        membership.save(update_fields=["is_active"])
+        _audit(
+            organizacao=membership.organizacao,
+            actor=admin,
+            membership=membership,
+            action="deactivate",
+        )
+    return membership
+
+
+def reactivate_member(*, admin, membership):
+    with transaction.atomic():
+        membership = Membership.objects.select_for_update().get(pk=membership.pk)
+        if membership.is_active:
+            return membership
+        membership.is_active = True
+        membership.save(update_fields=["is_active"])
+        _audit(
+            organizacao=membership.organizacao,
+            actor=admin,
+            membership=membership,
+            action="reactivate",
+        )
+    return membership
+
+
+def can_reset_password(membership):
+    """
+    A password é da conta, não da escola: o admin só faz reset a contas que a
+    própria organização provisionou e que não pertencem a outra organização.
+    Assim um admin nunca toma uma conta de outra escola nem do marketplace.
+    """
+    if membership.provisioned_at is None:
+        return False
+    return not (
+        Membership.objects.filter(user_id=membership.user_id)
+        .exclude(organizacao_id=membership.organizacao_id)
+        .exists()
+    )
+
+
+def reset_member_password(*, admin, membership):
+    """D9: nova password temporária, troca obrigatória e sessões revogadas."""
+    if membership.user_id == admin.pk:
+        raise MemberActionError(
+            "Use a troca de password para a sua própria conta.", status=400
+        )
+    if not can_reset_password(membership):
+        raise MemberActionError(
+            "Esta conta não é gerida só por esta organização.", status=403
+        )
+    password = generate_temporary_password()
+    now = timezone.now()
+    expires_at = now + TEMP_PASSWORD_VALIDITY
+    with transaction.atomic():
+        user = CustomUser.objects.select_for_update().get(pk=membership.user_id)
+        user.set_password(password)
+        # Gravados juntos: os tokens emitidos antes deixam de valer (D7).
+        user.password_changed_at = now
+        user.must_change_password = True
+        user.temp_password_expires_at = expires_at
+        user.save()
+        _audit(
+            organizacao=membership.organizacao,
+            actor=admin,
+            membership=membership,
+            action="reset_password",
+        )
+    return password, expires_at

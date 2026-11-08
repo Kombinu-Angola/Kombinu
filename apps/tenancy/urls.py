@@ -1,7 +1,29 @@
 from django.urls import path
 
-from .views import ProvisionMembersView
+from .views import (
+    MemberDeactivateView,
+    MemberListView,
+    MemberPasswordResetView,
+    MemberReactivateView,
+    ProvisionMembersView,
+)
 
 urlpatterns = [
+    path("members/", MemberListView.as_view(), name="tenancy-members"),
     path("members/bulk/", ProvisionMembersView.as_view(), name="tenancy-members-bulk"),
+    path(
+        "members/<uuid:id>/deactivate/",
+        MemberDeactivateView.as_view(),
+        name="tenancy-member-deactivate",
+    ),
+    path(
+        "members/<uuid:id>/reactivate/",
+        MemberReactivateView.as_view(),
+        name="tenancy-member-reactivate",
+    ),
+    path(
+        "members/<uuid:id>/reset-password/",
+        MemberPasswordResetView.as_view(),
+        name="tenancy-member-reset-password",
+    ),
 ]

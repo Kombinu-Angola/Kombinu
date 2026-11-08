@@ -311,6 +311,15 @@ Testes de isolamento em todas as branches 3–6: um admin da escola A não provi
 
 ---
 
+### 7.3 Gestão de membros (etapa 6, implementada)
+
+- Listar, desactivar e reactivar membros e reset de password: só o admin activo da organização do `X-Workspace`. Uma pertença de outra organização dá 404 pelo próprio workspace e 403 pelo workspace alheio.
+- Um admin não se desactiva a si próprio, e a organização nunca fica sem admin activo (verificado com `select_for_update`).
+- **O reset de password é restrito** a contas que a própria organização provisionou e que não pertencem a outra organização. A password é da conta e não da escola: sem esta regra, o admin da escola A podia tomar uma conta que também está na escola B ou no marketplace. O admin não faz reset a si próprio (usa a troca de password).
+- Cada acção fica em `AuditoriaMembro` (organização, autor, pertença, acção, data).
+
+---
+
 ## 8. O que não verifiquei
 
 - **Custo real do hashing em produção** (Render/Linux); só observei o efeito nos testes locais.
