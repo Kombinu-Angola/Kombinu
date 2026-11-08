@@ -5,6 +5,25 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Auth institucional (2/6): revogação de sessões
+
+### Segurança
+
+- **Trocar a password invalida as sessões anteriores (D7):** um access ou refresh token emitido antes de `CustomUser.password_changed_at` passa a ser recusado com `401` e `code: "token_not_valid"` (o formato padrão do simplejwt), em qualquer endpoint autenticado e em `POST /api/auth/token/refresh/`. Sem tabelas novas nem blacklist.
+- `password_changed_at` é actualizado por `set_password` em contas já existentes (troca pela API, pelo admin ou por reset). A criação da conta não conta como troca, e o rehash automático do hasher no login grava só o campo `password`, por isso não revoga sessões.
+- A comparação é feita ao segundo (resolução do `iat`): os tokens emitidos no mesmo segundo da troca continuam válidos.
+
+### Alterado
+
+- Autenticação por omissão: `apps.accounts.authentication.PasswordAwareJWTAuthentication` (subclasse do `JWTAuthentication` do simplejwt).
+- A rotação do refresh token (também D7) fica para depois de o contrato com o frontend fechar.
+
+### Testes
+
+- Tokens sem troca de password, access e refresh anteriores à troca (`401 token_not_valid`), tokens no mesmo segundo, novo login depois da troca, `set_password` só em contas existentes e rehash sem revogação.
+
+---
+
 ## [Não Lançado] - Auth institucional (3/6): papel de criador
 
 ### Alterado
