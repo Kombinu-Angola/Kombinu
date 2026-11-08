@@ -178,6 +178,7 @@ Opções: limitar o lote a um valor medido; processar em *chunks* com resposta p
 | S8 | **Adesão automática por domínio de email** (`Organizacao.domain`) permitiria a qualquer pessoa reclamar uma escola com um email não verificado | **Não implementar.** Sem verificação de email, não é seguro | — |
 | S9 | **Dados de menores.** Alunos podem ser menores; a conta guarda nome e código | Minimização: nenhum campo extra (sem data de nascimento, morada, telefone) | **Parecer legal pendente** (protecção de dados, como em D9 do relatório da Fase 1) |
 | S10 | **Email técnico exposto** em perfil/exportações revela estrutura de identificadores | Não devolver `email` técnico à UI | — |
+| S11 | **Sessão sem limite máximo** (D7, rotação sem blacklist): cada refresh emite um refresh novo válido por 1 dia, por isso uma sessão em uso nunca expira; um refresh roubado e usado com regularidade mantém o acesso, e o refresh antigo continua válido até expirar | Troca de password revoga todos os tokens (`password_changed_at`); desactivar a conta corta o acesso. **Mitigação futura:** `rest_framework_simplejwt.token_blacklist` com `BLACKLIST_AFTER_ROTATION` (app e tabelas novas) e/ou um limite absoluto de sessão (ex.: claim com a hora do login original, recusada ao fim de N dias) | Aceite pelo CTO em D7; rever antes do piloto com alunos reais |
 
 ### 4.3 Reset e recuperação
 
@@ -215,6 +216,34 @@ Sem infra de email, **não há recuperação self-service** para contas de forma
 | Registo (`/register/`) | Sem alteração; as contas institucionais não passam por aqui |
 | JWT | Sem claims novas; o gate de troca lê o utilizador na BD |
 | Testes | Hasher rápido nos testes para o provisionamento em lote não custar minutos |
+
+---
+
+### 5.4 Contrato aprovado (CTO, Novembro de 2026; implementado na etapa 4)
+
+Ajustes do CTO à proposta: **snake_case** em todas as chaves novas, como o resto da API; nome de exibição sempre presente; rotação do refresh aprovada.
+
+| Endpoint | Pedido | Resposta |
+|---|---|---|
+| `POST /api/auth/institutional/login/` | `{ school_code, student_code, password }`, onde `school_code` é o `Organizacao.code` (6 caracteres), **não o UUID** | `200 { access_token, refresh_token, user }`; qualquer falha → `401 { "error": "Invalid credentials." }` igual; `429` por throttling |
+| `POST /api/auth/login/` | sem mudanças | o `user` ganha os campos abaixo |
+| `POST /api/auth/password/change/` (autenticado) | `{ current_password, new_password }` | `200 { access_token, refresh_token }` (os anteriores deixam de valer); `400` com erros em `current_password` ou `new_password` |
+| `POST /api/auth/token/refresh/` | `{ refresh }` | `{ access, refresh }` (rotação, sem blacklist); `401 token_not_valid` se a password mudou depois da emissão |
+
+Campos novos no `user` dos dois logins:
+- `must_change_password` (bool);
+- `memberships: [{ organizacao_id, name, code, role }]`, só as activas em organizações activas;
+- `email`: `null` nas contas com email técnico (`*.kombinu.invalid`);
+- `first_name`: nunca vazio nas contas institucionais, com o `student_code` como fallback (o mesmo para `nome`).
+
+Gate (D6): enquanto `must_change_password` for `true`, qualquer endpoint autenticado responde `403 { "detail", "code": "password_change_required" }`, excepto a troca de password e o refresh. O login e o registo ignoram o header `Authorization`, por isso um token antigo não bloqueia um novo login.
+
+Regras do login institucional:
+- escola inactiva, conta inactiva ou password temporária expirada → 401 igual aos outros;
+- as contas com email técnico só entram pelo login institucional: `POST /api/auth/login/` recusa `*.kombinu.invalid` com o mesmo 401, e o registo aberto recusa esse domínio (400);
+- a expiração da password temporária é uma regra única, aplicada aos dois logins;
+- `Membership` inactiva (aluno que saiu, D13) → login permitido, sem essa escola em `memberships`;
+- quando a conta não existe, o hash da password corre na mesma, para o tempo de resposta não revelar se existe.
 
 ---
 

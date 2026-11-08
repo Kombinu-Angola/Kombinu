@@ -5,6 +5,39 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Auth institucional (4/6): login, troca obrigatória e troca de password
+
+### Adicionado
+
+- **`POST /api/auth/institutional/login/`** (D1, D10): `{ school_code, student_code, password }`. `school_code` é o `Organizacao.code` de 6 caracteres, não o UUID. Devolve o mesmo envelope do login por email. Qualquer falha (escola inexistente ou inactiva, aluno inexistente, password errada, conta inactiva, password temporária expirada) devolve o mesmo `401 { "error": "Invalid credentials." }`, e o hash corre mesmo quando a conta não existe (S2). Throttling: 30/min por IP e 5/min por par (escola, aluno).
+- **`POST /api/auth/password/change/`** (D6): `{ current_password, new_password }` → `{ access_token, refresh_token }` novos. Grava `password` e `password_changed_at` juntos, o que revoga as sessões anteriores (D7), e desliga `must_change_password`. Erros 400 nas mesmas chaves. Limite: 10/hora por utilizador (provisório).
+- **Gate de troca obrigatória** (D6): com `must_change_password`, qualquer endpoint autenticado devolve `403 { "detail", "code": "password_change_required" }`, excepto a troca de password e o refresh.
+- **`user` nos dois logins:** `must_change_password` e `memberships: [{ organizacao_id, name, code, role }]` (só activas, em organizações activas; D13).
+
+### Alterado
+
+- **`user.email` é `null` nas contas institucionais** (email técnico `*.kombinu.invalid`), e o email técnico nunca sai da API. **`first_name` e `nome`** usam o `student_code` como fallback nessas contas.
+
+### Segurança
+
+- **As contas institucionais só entram pelo login institucional:** `POST /api/auth/login/` recusa emails técnicos (`*.kombinu.invalid`, que são previsíveis) com o mesmo `401 Invalid credentials.`. Sem isto, a password temporária expirada continuava a dar acesso pelo login por email, e o throttling por conta tinha orçamento duplicado.
+- **Expiração da password temporária numa regra única** (`temp_password_expired`), aplicada aos dois logins.
+- **O registo aberto recusa o domínio técnico:** `POST /api/auth/register/` com um email `*.kombinu.invalid` → `400`. Impede que alguém ocupe antecipadamente o email técnico de um aluno e bloqueie o seu provisionamento.
+
+### Corrigido
+
+- **Login e registo com um token antigo no header:** `POST /api/auth/login/` e `POST /api/auth/register/` devolviam `401 token_not_valid` quando o pedido trazia um Bearer expirado ou inválido, mesmo com credenciais certas. Passam a ignorar o header `Authorization` (`authentication_classes = []`). O refresh já não autenticava.
+
+### Testes
+
+- 20 testes novos (`apps/accounts/test_institutional.py`). Isolamento:
+  - o mesmo `student_code` em duas escolas resolve pela escola;
+  - o código de uma escola não autentica alunos de outra;
+  - `memberships` só mostra a própria escola.
+- Também: todas as falhas com o mesmo 401, o UUID recusado como código, escola, conta ou password temporária inactivas ou expiradas, aluno que saiu, nome de exibição, Bearer antigo no login, gate em vários endpoints, refresh permitido durante a troca pendente, troca com revogação e validações.
+
+---
+
 ## [Não Lançado] - Auth institucional (2/6, complemento): rotação do refresh
 
 ### Alterado
