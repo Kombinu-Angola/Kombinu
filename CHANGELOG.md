@@ -5,6 +5,23 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Auth institucional (3/6): papel de criador
+
+### Alterado
+
+- **`IsCreator` e criação de quizzes usam o papel no workspace activo (D11):** no marketplace continua a ser preciso `user_type="creator"`; numa organização conta o papel `teacher` ou `admin` na `Membership`, seja qual for o `user_type`. Afecta `POST /api/contents/`, `POST /api/quizzes/contents/<id>/generate-quiz/` e `POST /api/quizzes/contents/<id>/manual-quiz/`.
+
+### Corrigido
+
+- Um professor (`teacher`) com `user_type="learner"` levava 403 ao criar conteúdo ou quiz na própria escola.
+- Um utilizador `creator` despromovido a `student` numa escola continuava a poder criar quizzes sobre o seu conteúdo dessa escola.
+
+### Testes
+
+- Isolamento: professor `learner` cria na sua escola, mas não noutra escola nem no marketplace; criador despromovido não cria quiz (manual nem gerado); no marketplace mantém-se a exigência de `creator`.
+
+---
+
 ## [Não Lançado] - Suite de testes rápida e teste instável
 
 ### Alterado
