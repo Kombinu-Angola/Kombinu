@@ -5,6 +5,18 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Login com token antigo no header
+
+### Corrigido
+
+- **`POST /api/auth/login/` e `POST /api/auth/register/` recusavam pedidos com um Bearer expirado ou inválido** no header `Authorization` (`401 token_not_valid`), mesmo com credenciais certas, porque a autenticação JWT corria antes da view. Um cliente que mantivesse um token velho ficava sem conseguir entrar. Passam a não autenticar (`authentication_classes = []`). O `POST /api/auth/token/refresh/` já não autenticava (simplejwt). No schema, login e registo ficam como públicos (`security: [{}]`).
+
+### Testes
+
+- Login, registo e refresh com um Bearer inválido no header → sucesso; um endpoint protegido continua a recusá-lo (401).
+
+---
+
 ## [Não Lançado] - Autenticação Bearer no Swagger
 
 ### Corrigido
