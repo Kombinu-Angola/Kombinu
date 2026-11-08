@@ -1,5 +1,8 @@
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+
+from apps.accounts.institutional import is_technical_email
 
 from .models import Membership
 
@@ -75,3 +78,52 @@ class ProvisionResponseSerializer(serializers.Serializer):
     lote_id = serializers.UUIDField()
     created = serializers.IntegerField()
     accounts = ProvisionedAccountSerializer(many=True)
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    """Membro da organização para o admin. O email técnico nunca sai da API."""
+
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+    email = serializers.SerializerMethodField()
+    must_change_password = serializers.BooleanField(
+        source="user.must_change_password", read_only=True
+    )
+
+    class Meta:
+        model = Membership
+        fields = (
+            "id",
+            "user_id",
+            "student_code",
+            "first_name",
+            "last_name",
+            "email",
+            "role",
+            "academic_year",
+            "faculty",
+            "course",
+            "is_active",
+            "joined_at",
+            "provisioned_at",
+            "must_change_password",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_first_name(self, obj):
+        return obj.user.first_name or obj.student_code or ""
+
+    @extend_schema_field(serializers.EmailField(allow_null=True))
+    def get_email(self, obj):
+        return None if is_technical_email(obj.user.email) else obj.user.email
+
+
+class PasswordResetResponseSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    student_code = serializers.CharField(allow_null=True)
+    temporary_password = serializers.CharField(
+        help_text="Mostrada só nesta resposta. Não é guardada em claro nem pode ser recuperada."
+    )
+    expires_at = serializers.DateTimeField()
