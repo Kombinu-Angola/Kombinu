@@ -3,6 +3,9 @@ Autenticação institucional (D1, D10): código da escola + número de aluno +
 password. As contas sem email próprio têm um email técnico não entregável
 (`<aluno>@<escola>.kombinu.invalid`) que nunca sai da API.
 """
+import secrets
+from datetime import timedelta
+
 from django.utils import timezone
 
 from apps.tenancy.codes import normalize_org_code, normalize_student_code
@@ -11,6 +14,22 @@ from apps.tenancy.models import Membership
 from .models import CustomUser
 
 TECHNICAL_EMAIL_DOMAIN = "kombinu.invalid"
+
+# D5: password temporária de uso único, sem caracteres ambíguos (0/O, 1/l/I).
+TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+TEMP_PASSWORD_LENGTH = 10
+TEMP_PASSWORD_VALIDITY = timedelta(days=7)
+
+
+def generate_temporary_password():
+    return "".join(
+        secrets.choice(TEMP_PASSWORD_ALPHABET) for _ in range(TEMP_PASSWORD_LENGTH)
+    )
+
+
+def technical_email(student_code, organizacao):
+    """Email não entregável e único por construção (RFC 2606, `.invalid`)."""
+    return f"{student_code.lower()}@{organizacao.slug}.{TECHNICAL_EMAIL_DOMAIN}"
 
 
 def is_technical_email(email):

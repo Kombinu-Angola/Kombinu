@@ -18,3 +18,11 @@ def normalize_org_code(value):
 def normalize_student_code(value):
     """Maiúsculas e sem espaços, para evitar duplicados por formatação."""
     return re.sub(r"\s+", "", value or "").upper()
+
+
+# Também é a parte local do email técnico: só caracteres seguros num email.
+STUDENT_CODE_RE = re.compile(r"^[A-Z0-9](?:[A-Z0-9_/-]|\.(?!\.))*(?<!\.)$")
+
+
+def is_valid_student_code(value):
+    return bool(value) and len(value) <= 40 and bool(STUDENT_CODE_RE.match(value))

@@ -216,6 +216,7 @@ REST_FRAMEWORK = {
         "register": "10/hour",
         "token_refresh": "30/min",
         "password_change": "10/hour",
+        "provisioning": "30/hour",
     },
     # Nº de proxies à frente da app, para ler o IP do cliente em
     # X-Forwarded-For. Sem valor, o DRF usa o cabeçalho inteiro como chave.
@@ -223,6 +224,11 @@ REST_FRAMEWORK = {
     if os.getenv("DRF_NUM_PROXIES")
     else None,
 }
+
+# Provisionamento em lote (D4): cada conta faz um hash PBKDF2, por isso o lote
+# tem de caber no timeout do worker (gunicorn: 30 s por omissão). Ajustar
+# depois de medir o custo do hash no servidor de produção.
+PROVISIONING_MAX_ROWS = int(os.getenv("PROVISIONING_MAX_ROWS", "20"))
 
 # Cofirguration for drf_spectacular
 SPECTACULAR_SETTINGS = {
