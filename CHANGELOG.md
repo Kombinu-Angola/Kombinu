@@ -5,6 +5,31 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Auth institucional (6/6): gestão de membros
+
+### Adicionado
+
+- **`GET /api/tenancy/members/`:** membros da organização do `X-Workspace`, só para o admin dela, paginado, com filtros `role`, `is_active` e `search` (número de aluno ou nome). O email técnico nunca sai (`email: null`); o `first_name` usa o número de aluno como fallback.
+- **`POST /api/tenancy/members/<id>/deactivate/` e `/reactivate/`** (D13): só a pertença muda; a conta e o XP mantêm-se. Um admin não se desactiva a si próprio, e a organização nunca fica sem admin activo (`select_for_update`). Repetir a acção não muda nada nem duplica a auditoria.
+- **`POST /api/tenancy/members/<id>/reset-password/`** (D9): password temporária nova (`secrets`, 7 dias), `must_change_password` e `password_changed_at` gravados juntos (revoga as sessões). Mostrada uma vez, com `Cache-Control: no-store`. Throttle `provisioning`.
+- **`AuditoriaMembro`** (migração `tenancy/0005`, aditiva): regista o reset, a desactivação e a reactivação (organização, autor, pertença, acção, data). Só leitura no admin.
+
+### Segurança
+
+- **O reset só vale para contas geridas só por esta organização:** contas provisionadas por ela e sem pertença a outra organização. A password é da conta, por isso o admin de uma escola não pode tomar uma conta que também pertence a outra escola ou ao marketplace. O admin também não faz reset a si próprio (400; usa a troca de password).
+- Uma pertença de outra organização dá 404 pelo próprio workspace (não revela que existe) e 403 pelo workspace alheio.
+
+### Testes
+
+- 13 testes novos (`apps/tenancy/test_gestao.py`). Isolamento:
+  - listagem só da própria escola;
+  - acções sobre um membro de outra escola → 404 e 403, sem auditoria;
+  - professor e não-membro → 403.
+- Também: auditoria, idempotência, perda de acesso ao workspace, auto-desactivação, último admin, e reset com revogação das sessões e login com a nova password.
+- Contas não geridas só pela escola → 403. Este teste falha sem a regra.
+
+---
+
 ## [Não Lançado] - Auth institucional (5/6): provisionamento em lote
 
 ### Adicionado
