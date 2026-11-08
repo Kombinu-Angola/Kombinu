@@ -454,3 +454,48 @@ class PasswordChangeRevokesTokensTest(APITestCase):
         self.user.save(update_fields=["password"])
         self.user.refresh_from_db()
         self.assertIsNone(self.user.password_changed_at)
+
+
+class RefreshRotationTest(APITestCase):
+    """D7: o refresh devolve `{access, refresh}`; sem blacklist."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = CustomUser.objects.create_user(
+            username="rot@example.com",
+            email="rot@example.com",
+            password="rotpass12345",
+            user_type="learner",
+        )
+        self.refresh_url = reverse("token_refresh")
+        self.protected_url = reverse("learner-stats")
+        self.old_refresh = str(RefreshToken.for_user(self.user))
+
+    def _refresh(self, token):
+        return self.client.post(self.refresh_url, {"refresh": token})
+
+    def test_refresh_returns_new_access_and_refresh(self):
+        r = self._refresh(self.old_refresh)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(r.data), {"access", "refresh"})
+        self.assertNotEqual(r.data["refresh"], self.old_refresh)
+
+        ok = self.client.get(
+            self.protected_url, HTTP_AUTHORIZATION=f"Bearer {r.data['access']}"
+        )
+        self.assertEqual(ok.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._refresh(r.data["refresh"]).status_code, status.HTTP_200_OK)
+
+    def test_old_refresh_still_valid_without_blacklist(self):
+        self.assertEqual(self._refresh(self.old_refresh).status_code, status.HTTP_200_OK)
+        self.assertEqual(self._refresh(self.old_refresh).status_code, status.HTTP_200_OK)
+
+    def test_rotated_refresh_is_revoked_by_password_change(self):
+        rotated = self._refresh(self.old_refresh).data["refresh"]
+        issued = RefreshToken(rotated)["iat"]
+        CustomUser.objects.filter(pk=self.user.pk).update(
+            password_changed_at=datetime.fromtimestamp(issued + 1, tz=dt_timezone.utc)
+        )
+        r = self._refresh(rotated)
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(r.data["code"], "token_not_valid")
