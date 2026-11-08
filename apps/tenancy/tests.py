@@ -1,3 +1,6 @@
+from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -5,7 +8,8 @@ from rest_framework.test import APITestCase
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
 from apps.quizzes.models import Option, Question, Quiz
-from apps.tenancy.models import Membership, Organizacao
+from apps.tenancy.codes import ORG_CODE_ALPHABET, ORG_CODE_LENGTH
+from apps.tenancy.models import Membership, Organizacao, ProvisionamentoLote
 
 
 def make_user(email, user_type="learner"):
@@ -134,3 +138,66 @@ class ProtectHistoryTests(APITestCase):
         self.client.force_authenticate(self.owner)
         r = self.client.delete(reverse("content-detail", args=[self.content.id]))
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class AuthInstitucionalModelosTests(TestCase):
+    """Campos da auth institucional (D2, D5–D7) e auditoria do lote."""
+
+    def setUp(self):
+        self.org_a = Organizacao.objects.create(name="Escola A", slug="escola-a")
+        self.org_b = Organizacao.objects.create(name="Escola B", slug="escola-b")
+
+    def test_organization_gets_short_unambiguous_code(self):
+        for org in (self.org_a, self.org_b):
+            self.assertEqual(len(org.code), ORG_CODE_LENGTH)
+            self.assertTrue(set(org.code) <= set(ORG_CODE_ALPHABET))
+        self.assertNotEqual(self.org_a.code, self.org_b.code)
+
+    def test_code_is_kept_on_save_and_normalized_when_given(self):
+        original = self.org_a.code
+        self.org_a.name = "Escola A renomeada"
+        self.org_a.save()
+        self.org_a.refresh_from_db()
+        self.assertEqual(self.org_a.code, original)
+
+        org = Organizacao.objects.create(name="C", slug="escola-c", code=" ab c23 ")
+        self.assertEqual(org.code, "ABC23")
+
+    def test_code_is_unique(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Organizacao.objects.create(name="Dup", slug="dup", code=self.org_a.code)
+
+    def test_student_code_is_normalized_and_unique_per_organization(self):
+        u1, u2, u3 = (make_user(f"s{i}@test.com") for i in range(3))
+        m1 = Membership.objects.create(
+            user=u1, organizacao=self.org_a, student_code=" 2024 - 0001 "
+        )
+        self.assertEqual(m1.student_code, "2024-0001")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Membership.objects.create(
+                user=u2, organizacao=self.org_a, student_code="2024-0001"
+            )
+        # O mesmo número noutra escola é outra pessoa.
+        Membership.objects.create(user=u2, organizacao=self.org_b, student_code="2024-0001")
+
+    def test_memberships_without_student_code_do_not_collide(self):
+        u1, u2 = make_user("a@test.com"), make_user("b@test.com")
+        m1 = Membership.objects.create(user=u1, organizacao=self.org_a, student_code="  ")
+        m2 = Membership.objects.create(user=u2, organizacao=self.org_a)
+        self.assertIsNone(m1.student_code)
+        self.assertIsNone(m2.student_code)
+
+    def test_user_auth_flags_default_off(self):
+        user = make_user("novo@test.com")
+        self.assertFalse(user.must_change_password)
+        self.assertIsNone(user.password_changed_at)
+        self.assertIsNone(user.temp_password_expires_at)
+
+    def test_organization_with_provisioning_audit_cannot_be_deleted(self):
+        admin = make_user("admin@test.com")
+        ProvisionamentoLote.objects.create(
+            organizacao=self.org_a, created_by=admin, accounts_created=3
+        )
+        with self.assertRaises(ProtectedError):
+            self.org_a.delete()

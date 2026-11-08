@@ -3,6 +3,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from .codes import generate_org_code, normalize_org_code, normalize_student_code
+
 
 class Organizacao(models.Model):
     """
@@ -18,6 +20,12 @@ class Organizacao(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=80, unique=True)
+    code = models.CharField(
+        max_length=6,
+        unique=True,
+        editable=False,
+        help_text="Código curto da escola usado no login institucional (D2).",
+    )
     domain = models.CharField(
         max_length=255, unique=True, null=True, blank=True,
         help_text="Domínio de email para adesão automática (opcional).",
@@ -32,6 +40,14 @@ class Organizacao(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        self.code = normalize_org_code(self.code)
+        if not self.code:
+            self.code = generate_org_code()
+            while Organizacao.objects.filter(code=self.code).exists():
+                self.code = generate_org_code()
+        super().save(*args, **kwargs)
 
 
 class Membership(models.Model):
@@ -54,6 +70,20 @@ class Membership(models.Model):
     academic_year = models.CharField(max_length=30, blank=True, default="")
     faculty = models.CharField(max_length=120, blank=True, default="")
     course = models.CharField(max_length=120, blank=True, default="")
+    student_code = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True,
+        help_text="Número de aluno atribuído pela escola; único por organização.",
+    )
+    provisioned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    provisioned_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
 
@@ -61,8 +91,41 @@ class Membership(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "organizacao"], name="unique_membership_user_org"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["organizacao", "student_code"],
+                name="unique_membership_org_student_code",
+            ),
         ]
 
     def __str__(self):
         return f"{self.user} @ {self.organizacao} ({self.role})"
+
+    def save(self, *args, **kwargs):
+        self.student_code = normalize_student_code(self.student_code) or None
+        super().save(*args, **kwargs)
+
+
+class ProvisionamentoLote(models.Model):
+    """Trilho de auditoria de cada lote de contas criado por um admin (D3/S6)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organizacao = models.ForeignKey(
+        Organizacao, on_delete=models.PROTECT, related_name="provisionamentos"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    accounts_created = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "lote de provisionamento"
+        verbose_name_plural = "lotes de provisionamento"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.organizacao} — {self.accounts_created} contas ({self.created_at:%Y-%m-%d})"

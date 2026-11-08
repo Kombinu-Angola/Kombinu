@@ -22,6 +22,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - Auth institucional (1/6): modelos
+
+### Adicionado
+
+- **`Organizacao.code`:** código curto da escola para o login institucional (D2), com 6 caracteres de um alfabeto sem ambíguos (sem `0/O`, `1/I`), único e gerado automaticamente. As organizações existentes recebem código numa migração de dados (`tenancy/0003`), entre a criação do campo nulável (`0002`) e a passagem a obrigatório e único (`0004`).
+- **`Membership.student_code`:** número de aluno atribuído pela escola, normalizado (maiúsculas, sem espaços) e único por organização. O mesmo número noutra escola é outra pessoa. `provisioned_by` e `provisioned_at` para auditoria.
+- **`CustomUser`:** `must_change_password`, `password_changed_at` e `temp_password_expires_at` (D5–D7), desligados por omissão.
+- **`ProvisionamentoLote`:** registo de cada lote de contas criado por um admin (organização, autor, data, nº de contas). `PROTECT` sobre a organização; só leitura no admin.
+
+Sem endpoints nem mudanças de contrato nesta etapa (ver `docs/relatorio-auth-institucional.md` §7.2).
+
+---
+
 ## [Não Lançado] - Suite de testes rápida e teste instável
 
 ### Alterado
