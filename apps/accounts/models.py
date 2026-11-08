@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 
 
@@ -21,3 +22,12 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    def set_password(self, raw_password):
+        # Qualquer troca numa conta existente (API, admin, reset) invalida os
+        # tokens anteriores quando gravada. A criação da conta não conta como
+        # troca, e o rehash automático no login grava só `password`
+        # (update_fields), por isso não revoga sessões.
+        super().set_password(raw_password)
+        if self.pk is not None:
+            self.password_changed_at = timezone.now()
