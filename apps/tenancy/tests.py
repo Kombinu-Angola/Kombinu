@@ -201,3 +201,32 @@ class AuthInstitucionalModelosTests(TestCase):
         )
         with self.assertRaises(ProtectedError):
             self.org_a.delete()
+
+
+class XWorkspaceSchemaTests(TestCase):
+    """O OpenAPI documenta o header `X-Workspace` onde o scoping se aplica."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from drf_spectacular.generators import SchemaGenerator
+
+        cls.schema = SchemaGenerator().get_schema(request=None, public=True)
+
+    def _headers(self, path, method):
+        op = self.schema["paths"][path][method]
+        return [p["name"] for p in op.get("parameters", []) if p["in"] == "header"]
+
+    def test_scoped_endpoints_document_x_workspace(self):
+        for path, method in (
+            ("/api/contents/", "get"),
+            ("/api/rankings/global/", "get"),
+            ("/api/quizzes/{quiz_id}/submit/", "post"),
+            ("/api/trilhas/", "get"),
+            ("/api/enquetes/", "get"),
+            ("/api/dashboard/learner/stats/", "get"),
+        ):
+            self.assertIn("X-Workspace", self._headers(path, method), path)
+
+    def test_auth_endpoints_do_not(self):
+        for path in ("/api/auth/login/", "/api/auth/register/"):
+            self.assertNotIn("X-Workspace", self._headers(path, "post"), path)

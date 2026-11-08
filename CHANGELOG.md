@@ -30,6 +30,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - `X-Workspace` no schema da API
+
+### Adicionado
+
+- **O header `X-Workspace` passa a estar documentado no OpenAPI/Swagger** em todas as operações com scoping por workspace (25: conteúdos, quizzes, ranking, dashboards, trilhas, enquetes, organizações), com a descrição do valor (UUID da organização ou `marketplace`) e dos erros (400, 403, 404). Os endpoints de autenticação não o têm. Implementado com `apps.tenancy.schema.WorkspaceAutoSchema` (`DEFAULT_SCHEMA_CLASS`), que acrescenta o parâmetro às views com `WorkspaceScopedMixin`. O resto do schema e os avisos do drf-spectacular não mudam.
+- README: secção sobre o `X-Workspace`.
+
+### Testes
+
+- Header presente em seis endpoints com scoping e ausente no login e no registo.
+
+---
+
 ## [Não Lançado] - Auth institucional (5/6): provisionamento em lote
 
 ### Adicionado
