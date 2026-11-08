@@ -129,3 +129,37 @@ class ProvisionamentoLote(models.Model):
 
     def __str__(self):
         return f"{self.organizacao} — {self.accounts_created} contas ({self.created_at:%Y-%m-%d})"
+
+
+class AuditoriaMembro(models.Model):
+    """Acções de gestão de um admin sobre membros da organização (D9)."""
+
+    ACTION_CHOICES = (
+        ("reset_password", "Reset de password"),
+        ("deactivate", "Desactivar"),
+        ("reactivate", "Reactivar"),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organizacao = models.ForeignKey(
+        Organizacao, on_delete=models.PROTECT, related_name="auditoria_membros"
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="+",
+    )
+    membership = models.ForeignKey(
+        Membership, on_delete=models.SET_NULL, null=True, related_name="auditoria"
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "auditoria de membro"
+        verbose_name_plural = "auditoria de membros"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.organizacao} — {self.action} ({self.created_at:%Y-%m-%d %H:%M})"
