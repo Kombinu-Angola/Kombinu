@@ -17,7 +17,10 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ### Alterado
 
 - **`user.email` é `null` nas contas institucionais** (email técnico `*.kombinu.invalid`), e o email técnico nunca sai da API. **`first_name` e `nome`** usam o `student_code` como fallback nessas contas.
-- Login e registo ignoram o header `Authorization` (`authentication_classes = []`): um Bearer expirado no pedido deixava de dar `401 token_not_valid` e passa a permitir o login.
+
+### Corrigido
+
+- **Login e registo com um token antigo no header:** `POST /api/auth/login/` e `POST /api/auth/register/` devolviam `401 token_not_valid` quando o pedido trazia um Bearer expirado ou inválido, mesmo com credenciais certas. Passam a ignorar o header `Authorization` (`authentication_classes = []`). O refresh já não autenticava.
 
 ### Testes
 
@@ -26,6 +29,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   - o código de uma escola não autentica alunos de outra;
   - `memberships` só mostra a própria escola.
 - Também: todas as falhas com o mesmo 401, o UUID recusado como código, escola, conta ou password temporária inactivas ou expiradas, aluno que saiu, nome de exibição, Bearer antigo no login, gate em vários endpoints, refresh permitido durante a troca pendente, troca com revogação e validações.
+
+---
+
+## [Não Lançado] - Auth institucional (2/6, complemento): rotação do refresh
+
+### Alterado
+
+- **Rotação do refresh token (D7):** `POST /api/auth/token/refresh/` passa de `{ "access" }` a `{ "access", "refresh" }` (`ROTATE_REFRESH_TOKENS = True`). **Breaking** para clientes que ignoravam a resposta; o frontend já guarda o refresh novo (contrato aprovado pelo CTO).
+- Sem blacklist: o refresh anterior continua válido até expirar (1 dia), salvo se a password for trocada depois de ele ser emitido (`password_changed_at`). A blacklist acrescentaria uma app e tabelas, e fica para quando for precisa a revogação remota.
+
+### Testes
+
+- Resposta `{access, refresh}` com tokens utilizáveis; refresh antigo ainda válido sem blacklist; refresh rodado revogado por troca de password.
 
 ---
 

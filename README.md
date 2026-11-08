@@ -193,7 +193,7 @@ backend/
 | `/api/auth/login/` | POST | Login por email — devolve `access_token`, `refresh_token` e `user` (com `memberships` e `must_change_password`) |
 | `/api/auth/institutional/login/` | POST | Login institucional: `{ school_code, student_code, password }` (`school_code` = código de 6 caracteres da escola, não o UUID). Mesmo envelope; qualquer falha → 401 igual |
 | `/api/auth/password/change/` | POST | `{ current_password, new_password }` → novos `access_token`/`refresh_token`; os anteriores deixam de valer |
-| `/api/auth/token/refresh/` | POST | Renovar access token sem novo login (401 `token_not_valid` se a password mudou depois de o refresh ser emitido) |
+| `/api/auth/token/refresh/` | POST | `{ refresh }` → `{ access, refresh }`: novo access e novo refresh (guardar os dois). 401 `token_not_valid` se a password mudou depois de o refresh ser emitido |
 | `/api/auth/profile/` | GET | Perfil com nome, pontos (XP) e nível |
 | `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
 | `/api/dashboard/learner/courses/` | GET | Cursos frequentados |
