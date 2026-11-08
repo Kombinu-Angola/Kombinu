@@ -5,6 +5,19 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Auth institucional (2/6, complemento): rotação do refresh
+
+### Alterado
+
+- **Rotação do refresh token (D7):** `POST /api/auth/token/refresh/` passa de `{ "access" }` a `{ "access", "refresh" }` (`ROTATE_REFRESH_TOKENS = True`). **Breaking** para clientes que ignoravam a resposta; o frontend já guarda o refresh novo (contrato aprovado pelo CTO).
+- Sem blacklist: o refresh anterior continua válido até expirar (1 dia), salvo se a password for trocada depois de ele ser emitido (`password_changed_at`). A blacklist acrescentaria uma app e tabelas, e fica para quando for precisa a revogação remota.
+
+### Testes
+
+- Resposta `{access, refresh}` com tokens utilizáveis; refresh antigo ainda válido sem blacklist; refresh rodado revogado por troca de password.
+
+---
+
 ## [Não Lançado] - Auth institucional (2/6): revogação de sessões
 
 ### Segurança
