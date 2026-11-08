@@ -214,6 +214,13 @@ backend/
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
 | `/api/tenancy/members/bulk/` | POST | Provisionamento em lote pelo admin da organização do `X-Workspace`: `{ dry_run, rows: [{ student_code, first_name, last_name, role, academic_year, faculty, course, email }] }`. Tudo ou nada, até `PROVISIONING_MAX_ROWS` linhas (20 por omissão); devolve as passwords temporárias uma única vez |
 
+**Workspace activo (`X-Workspace`):** os endpoints de conteúdos, quizzes,
+ranking, dashboards, trilhas, enquetes e organizações leem o header
+`X-Workspace` (UUID da organização, o `organizacao_id` de `user.memberships`,
+ou `marketplace`; ausente = marketplace). Exige pertença activa: UUID inválido
+→ 400, sem pertença → 403, objectos de outro contexto → 404. O Swagger mostra
+o header em cada um destes endpoints.
+
 **Limites de pedidos (provisórios):** login 30/min por IP e 5/min por conta;
 registo 10/hora por IP; refresh 30/min por IP. Acima do limite a API devolve
 `429 Too Many Requests`. Na submissão de quiz, cada pergunta só pode ser
