@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch
 
 from django.conf import settings
@@ -6,6 +7,8 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from apps.accounts.models import CustomUser
 from apps.accounts.throttles import (
     LoginIdentifierRateThrottle,
@@ -380,3 +383,74 @@ class AuthThrottlingTest(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         response = self.client.post(self.refresh_url, {"refresh": "invalido"})
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class PasswordChangeRevokesTokensTest(APITestCase):
+    """D7: tokens emitidos antes de `password_changed_at` deixam de valer."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = CustomUser.objects.create_user(
+            username="sessao@example.com",
+            email="sessao@example.com",
+            password="sessaopass123",
+            user_type="learner",
+        )
+        self.protected_url = reverse("learner-stats")
+        self.refresh_url = reverse("token_refresh")
+        self.refresh = RefreshToken.for_user(self.user)
+        self.access = str(self.refresh.access_token)
+        self.issued_at = datetime.fromtimestamp(self.refresh["iat"], tz=dt_timezone.utc)
+
+    def _get(self, access):
+        return self.client.get(self.protected_url, HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def _mark_changed(self, when):
+        CustomUser.objects.filter(pk=self.user.pk).update(password_changed_at=when)
+
+    def test_tokens_work_when_password_never_changed(self):
+        self.assertEqual(self._get(self.access).status_code, status.HTTP_200_OK)
+        r = self.client.post(self.refresh_url, {"refresh": str(self.refresh)})
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_access_token_issued_before_change_is_rejected(self):
+        self._mark_changed(self.issued_at + timedelta(seconds=1))
+        r = self._get(self.access)
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(r.data["code"], "token_not_valid")
+
+    def test_refresh_token_issued_before_change_is_rejected(self):
+        self._mark_changed(self.issued_at + timedelta(seconds=1))
+        r = self.client.post(self.refresh_url, {"refresh": str(self.refresh)})
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(r.data["code"], "token_not_valid")
+
+    def test_tokens_issued_in_the_same_second_as_change_stay_valid(self):
+        self._mark_changed(self.issued_at + timedelta(microseconds=999_000))
+        self.assertEqual(self._get(self.access).status_code, status.HTTP_200_OK)
+
+    def test_new_login_after_change_works(self):
+        self._mark_changed(self.issued_at - timedelta(seconds=1))
+        r = self.client.post(
+            reverse("auth_login"),
+            {"email": "sessao@example.com", "password": "sessaopass123"},
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._get(r.data["access_token"]).status_code, status.HTTP_200_OK)
+
+    def test_set_password_stamps_existing_accounts_only(self):
+        novo = CustomUser(username="n@example.com", email="n@example.com", user_type="learner")
+        novo.set_password("qualquerpass123")
+        self.assertIsNone(novo.password_changed_at)
+
+        self.user.set_password("outrapass123")
+        self.user.save()
+        self.user.refresh_from_db()
+        self.assertIsNotNone(self.user.password_changed_at)
+
+    def test_password_rehash_on_login_does_not_revoke_sessions(self):
+        # O rehash (ex.: hasher actualizado) grava só o campo `password`.
+        self.user.set_password("sessaopass123")
+        self.user.save(update_fields=["password"])
+        self.user.refresh_from_db()
+        self.assertIsNone(self.user.password_changed_at)

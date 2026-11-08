@@ -1,8 +1,13 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.settings import api_settings as jwt_settings
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import extend_schema, OpenApiResponse
+from .authentication import REVOKED_MESSAGE, issued_before_password_change
+from .models import CustomUser
 from .serializers import UserProfileSerializer, UserRegistrationSerializer
 from .throttles import (
     LoginIdentifierRateThrottle,
@@ -169,6 +174,29 @@ class LoginView(APIView):
             return Response(
                 {"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED
             )
+
+
+class PasswordAwareTokenRefreshView(TokenRefreshView):
+    """
+    Recebe um refresh token e devolve um novo access token. Responde 401
+    (`token_not_valid`) se o refresh token foi emitido antes da última troca
+    de password da conta.
+    """
+
+    def post(self, request, *args, **kwargs):
+        raw = request.data.get("refresh")
+        if isinstance(raw, str):
+            try:
+                refresh = RefreshToken(raw)
+            except TokenError:
+                refresh = None  # o caminho normal devolve o erro habitual
+            if refresh is not None:
+                user = CustomUser.objects.filter(
+                    **{jwt_settings.USER_ID_FIELD: refresh.payload.get(jwt_settings.USER_ID_CLAIM)}
+                ).first()
+                if user is not None and issued_before_password_change(user, refresh):
+                    raise InvalidToken(REVOKED_MESSAGE)
+        return super().post(request, *args, **kwargs)
 
 
 from rest_framework.permissions import IsAuthenticated
