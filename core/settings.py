@@ -234,7 +234,7 @@ PROVISIONING_MAX_ROWS = int(os.getenv("PROVISIONING_MAX_ROWS", "20"))
 SPECTACULAR_SETTINGS = {
     "TITLE": "Kombinu API",
     "DESCRIPTION": "API da plataforma educacional Kombinu",
-    "VERSION": "2.7.0",
+    "VERSION": "2.7.2",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     # A API autentica por Bearer JWT; sem esta classe na lista o Swagger
