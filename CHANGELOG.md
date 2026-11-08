@@ -5,6 +5,16 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Autenticação Bearer no Swagger
+
+### Corrigido
+
+- **`/api/docs/` não mostrava autenticação:** `SPECTACULAR_SETTINGS["AUTHENTICATION_WHITELIST"]` só tinha `TokenAuthentication`, que a API não usa. Passa a ter a autenticação JWT da API. O schema ganha o esquema `jwtAuth` (`http`, `bearer`, `JWT`), e o Swagger passa a mostrar o botão "Authorize" e o cadeado nos endpoints protegidos.
+- Extensão de schema para `PasswordAwareJWTAuthentication` (`apps/accounts/schema.py`): a do drf-spectacular só reconhece a classe original do simplejwt.
+- `POST /api/auth/login/` e `POST /api/auth/register/` passam de `permission_classes = []` a `[AllowAny]`. O comportamento é o mesmo; no schema ficam marcados como públicos (autenticação opcional) em vez de exigirem JWT.
+
+---
+
 ## [Não Lançado] - Auth institucional (2/6): revogação de sessões
 
 ### Segurança

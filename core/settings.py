@@ -230,8 +230,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "2.7.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
+    # A API autentica por Bearer JWT; sem esta classe na lista o Swagger
+    # não mostrava autenticação nenhuma.
     "AUTHENTICATION_WHITELIST": [
-        "rest_framework.authentication.TokenAuthentication",
+        "apps.accounts.authentication.PasswordAwareJWTAuthentication",
     ],
     "SERVE_AUTHENTICATION": [
         "rest_framework.authentication.TokenAuthentication",
