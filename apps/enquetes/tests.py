@@ -36,7 +36,9 @@ class EnqueteBase(APITestCase):
         self.org = Organizacao.objects.create(name="Uni A", slug="uni-a")
         self.other_org = Organizacao.objects.create(name="Uni B", slug="uni-b")
         self.teacher = make_user("prof@test.com", "creator")
-        Membership.objects.create(user=self.teacher, organizacao=self.org, role="teacher")
+        Membership.objects.create(
+            user=self.teacher, organizacao=self.org, role="teacher"
+        )
         self.students = []
         for i, year in enumerate(["1º ano", "1º ano", "2º ano", "2º ano", "2º ano"]):
             u = make_user(f"aluno{i}@test.com")
@@ -54,7 +56,9 @@ class EnqueteBase(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         if not publish:
             return r.data
-        p = self.client.post(reverse("enquete-publish", args=[r.data["id"]]), **self.hdr)
+        p = self.client.post(
+            reverse("enquete-publish", args=[r.data["id"]]), **self.hdr
+        )
         self.assertEqual(p.status_code, status.HTTP_200_OK, p.data)
         return p.data
 
@@ -232,9 +236,13 @@ class EnqueteResultsTests(EnqueteBase):
         e = self.create_enquete()
         url = lambda name: reverse(name, args=[e["id"]])  # noqa: E731
         self.client.force_authenticate(self.students[0])
-        self.assertEqual(self.client.post(url("enquete-shown"), **self.hdr).status_code, 204)
+        self.assertEqual(
+            self.client.post(url("enquete-shown"), **self.hdr).status_code, 204
+        )
         self.client.force_authenticate(self.students[1])
-        self.assertEqual(self.client.post(url("enquete-dismiss"), **self.hdr).status_code, 204)
+        self.assertEqual(
+            self.client.post(url("enquete-dismiss"), **self.hdr).status_code, 204
+        )
         self.vote(self.students[2], e, 0)
 
         res = self._results(e)
@@ -263,11 +271,22 @@ class EnqueteResultsTests(EnqueteBase):
         res = self._results(e)
         self.assertEqual(
             set(res),
-            {"question", "decision", "subject", "closedAt", "answers", "dismissed",
-             "shown", "distribution", "byYear"},
+            {
+                "question",
+                "decision",
+                "subject",
+                "closedAt",
+                "answers",
+                "dismissed",
+                "shown",
+                "distribution",
+                "byYear",
+            },
         )
         self.assertIsInstance(res["closedAt"], str)
-        self.assertEqual(set(res["byYear"][0]), {"year", "answers", "topChoice", "share"})
+        self.assertEqual(
+            set(res["byYear"][0]), {"year", "answers", "topChoice", "share"}
+        )
 
     def test_results_only_for_creator_and_expose_no_identity(self):
         e = self.create_enquete()

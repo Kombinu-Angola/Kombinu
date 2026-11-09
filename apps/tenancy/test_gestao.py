@@ -16,7 +16,10 @@ from apps.tenancy.tests import make_user
 def make_provisioned(org, student_code, admin, first_name=""):
     email = f"{student_code.lower()}@{org.slug}.kombinu.invalid"
     user = CustomUser.objects.create_user(
-        username=email, email=email, password="Antiga-123", user_type="learner",
+        username=email,
+        email=email,
+        password="Antiga-123",
+        user_type="learner",
         first_name=first_name,
     )
     return Membership.objects.create(
@@ -42,7 +45,9 @@ class MemberManagementTests(APITestCase):
         self.m_admin_a = Membership.objects.create(
             user=self.admin_a, organizacao=self.org_a, role="admin"
         )
-        Membership.objects.create(user=self.admin_b, organizacao=self.org_b, role="admin")
+        Membership.objects.create(
+            user=self.admin_b, organizacao=self.org_b, role="admin"
+        )
         self.m_teacher_a = Membership.objects.create(
             user=self.teacher_a, organizacao=self.org_a, role="teacher"
         )
@@ -61,11 +66,14 @@ class MemberManagementTests(APITestCase):
 
     # --- listar --------------------------------------------------------------
     def test_admin_lists_only_own_school_without_technical_email(self):
-        r = self.client.get(reverse("tenancy-members"), **self._as(self.admin_a, self.org_a))
+        r = self.client.get(
+            reverse("tenancy-members"), **self._as(self.admin_a, self.org_a)
+        )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         ids = {m["id"] for m in r.data["results"]}
         self.assertEqual(
-            ids, {str(self.m_admin_a.id), str(self.m_teacher_a.id), str(self.aluno_a.id)}
+            ids,
+            {str(self.m_admin_a.id), str(self.m_teacher_a.id), str(self.aluno_a.id)},
         )
         self.assertNotIn(str(self.aluno_b.id), ids)
         self.assertNotIn("kombinu.invalid", str(r.data))
@@ -169,7 +177,9 @@ class MemberManagementTests(APITestCase):
 
     def test_organization_always_keeps_an_active_admin(self):
         second = make_user("admin2-a@escola.ao")
-        m_second = Membership.objects.create(user=second, organizacao=self.org_a, role="admin")
+        m_second = Membership.objects.create(
+            user=second, organizacao=self.org_a, role="admin"
+        )
         # Com dois admins, um pode desactivar o outro.
         r = self._action(self.admin_a, self.org_a, m_second, "deactivate")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
@@ -183,7 +193,9 @@ class MemberManagementTests(APITestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(
-            Membership.objects.filter(organizacao=self.org_a, role="admin", is_active=True).exists()
+            Membership.objects.filter(
+                organizacao=self.org_a, role="admin", is_active=True
+            ).exists()
         )
 
     # --- reset de password -----------------------------------------------------
@@ -204,11 +216,11 @@ class MemberManagementTests(APITestCase):
         self.assertTrue(user.check_password(password))
         self.assertFalse(user.check_password("Antiga-123"))
         self.assertTrue(user.must_change_password)
-        self.assertGreaterEqual(user.temp_password_expires_at, before + timedelta(days=7))
-        self.assertGreaterEqual(user.password_changed_at, before.replace(microsecond=0))
-        self.assertEqual(
-            AuditoriaMembro.objects.get().action, "reset_password"
+        self.assertGreaterEqual(
+            user.temp_password_expires_at, before + timedelta(days=7)
         )
+        self.assertGreaterEqual(user.password_changed_at, before.replace(microsecond=0))
+        self.assertEqual(AuditoriaMembro.objects.get().action, "reset_password")
 
         # Sessões anteriores revogadas (troca simulada 1 s depois da emissão).
         CustomUser.objects.filter(pk=user.pk).update(
@@ -224,7 +236,11 @@ class MemberManagementTests(APITestCase):
         CustomUser.objects.filter(pk=user.pk).update(password_changed_at=before)
         login = self.client.post(
             reverse("auth_institutional_login"),
-            {"school_code": self.org_a.code, "student_code": "2024-001", "password": password},
+            {
+                "school_code": self.org_a.code,
+                "student_code": "2024-001",
+                "password": password,
+            },
             format="json",
         )
         self.assertEqual(login.status_code, status.HTTP_200_OK)
@@ -236,7 +252,9 @@ class MemberManagementTests(APITestCase):
         m_externo = Membership.objects.create(user=externo, organizacao=self.org_a)
         r = self._action(self.admin_a, self.org_a, m_externo, "reset-password")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertTrue(CustomUser.objects.get(pk=externo.pk).check_password("pass12345"))
+        self.assertTrue(
+            CustomUser.objects.get(pk=externo.pk).check_password("pass12345")
+        )
 
         # Conta provisionada pela A que também pertence à B.
         Membership.objects.create(user=self.aluno_a.user, organizacao=self.org_b)
@@ -248,6 +266,8 @@ class MemberManagementTests(APITestCase):
         self.assertFalse(AuditoriaMembro.objects.exists())
 
     def test_admin_cannot_reset_own_password_here(self):
-        Membership.objects.filter(pk=self.m_admin_a.pk).update(provisioned_at=timezone.now())
+        Membership.objects.filter(pk=self.m_admin_a.pk).update(
+            provisioned_at=timezone.now()
+        )
         r = self._action(self.admin_a, self.org_a, self.m_admin_a, "reset-password")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)

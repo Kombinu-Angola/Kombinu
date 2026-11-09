@@ -27,7 +27,9 @@ def award_xp(user, quiz, score):
         user=user, quiz=quiz, score=score, xp_awarded=score
     )
     record_xp(
-        user=user, amount=score, source_type="quiz_submission",
+        user=user,
+        amount=score,
+        source_type="quiz_submission",
         source_id=submission.pk,
     )
     return submission
@@ -39,7 +41,7 @@ class CustomUserModelTest(TestCase):
             username="test@example.com",
             email="test@example.com",
             password="testpass123",
-            user_type="learner"
+            user_type="learner",
         )
 
     def test_user_creation(self):
@@ -55,12 +57,13 @@ class CustomUserModelTest(TestCase):
     def test_email_is_unique(self):
         """Testa que o email deve ser único"""
         from django.db import IntegrityError
+
         with self.assertRaises(IntegrityError):
             CustomUser.objects.create_user(
                 username="test2@example.com",
                 email="test@example.com",  # Email duplicado
                 password="testpass456",
-                user_type="creator"
+                user_type="creator",
             )
 
     def test_user_type_choices(self):
@@ -69,15 +72,15 @@ class CustomUserModelTest(TestCase):
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         self.assertEqual(creator.user_type, "creator")
-        
+
         learner = CustomUser.objects.create_user(
             username="learner@example.com",
             email="learner@example.com",
             password="learnerpass123",
-            user_type="learner"
+            user_type="learner",
         )
         self.assertEqual(learner.user_type, "learner")
 
@@ -91,13 +94,13 @@ class AuthAPITest(APITestCase):
             "password": "newpassword123",
             "first_name": "New",
             "last_name": "User",
-            "user_type": "learner"
+            "user_type": "learner",
         }
         self.existing_user = CustomUser.objects.create_user(
             username="existing@example.com",
             email="existing@example.com",
             password="existingpass123",
-            user_type="learner"
+            user_type="learner",
         )
 
     def test_register_user_success(self):
@@ -105,7 +108,9 @@ class AuthAPITest(APITestCase):
         response = self.client.post(self.register_url, self.user_data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(CustomUser.objects.count(), 2)
-        self.assertEqual(CustomUser.objects.get(email="newuser@example.com").first_name, "New")
+        self.assertEqual(
+            CustomUser.objects.get(email="newuser@example.com").first_name, "New"
+        )
 
     def test_register_user_invalid_email(self):
         """Testa o registro com email inválido"""
@@ -123,10 +128,7 @@ class AuthAPITest(APITestCase):
 
     def test_login_success(self):
         """Testa o login com credenciais válidas"""
-        data = {
-            "email": "existing@example.com",
-            "password": "existingpass123"
-        }
+        data = {"email": "existing@example.com", "password": "existingpass123"}
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access_token", response.data)
@@ -134,10 +136,7 @@ class AuthAPITest(APITestCase):
 
     def test_login_invalid_credentials(self):
         """Testa o login com credenciais inválidas"""
-        data = {
-            "email": "existing@example.com",
-            "password": "wrongpassword"
-        }
+        data = {"email": "existing@example.com", "password": "wrongpassword"}
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -287,6 +286,7 @@ class LearnerCoursesAPITest(APITestCase):
         last_accessed = response.data[0]["lastAccessed"]
         self.assertNotEqual(last_accessed, "2024-03-10")
         from datetime import date
+
         date.fromisoformat(last_accessed)
 
     def test_thumbnail_uses_content_thumbnail(self):
@@ -403,7 +403,9 @@ class PasswordChangeRevokesTokensTest(APITestCase):
         self.issued_at = datetime.fromtimestamp(self.refresh["iat"], tz=dt_timezone.utc)
 
     def _get(self, access):
-        return self.client.get(self.protected_url, HTTP_AUTHORIZATION=f"Bearer {access}")
+        return self.client.get(
+            self.protected_url, HTTP_AUTHORIZATION=f"Bearer {access}"
+        )
 
     def _mark_changed(self, when):
         CustomUser.objects.filter(pk=self.user.pk).update(password_changed_at=when)
@@ -436,10 +438,14 @@ class PasswordChangeRevokesTokensTest(APITestCase):
             {"email": "sessao@example.com", "password": "sessaopass123"},
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertEqual(self._get(r.data["access_token"]).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._get(r.data["access_token"]).status_code, status.HTTP_200_OK
+        )
 
     def test_set_password_stamps_existing_accounts_only(self):
-        novo = CustomUser(username="n@example.com", email="n@example.com", user_type="learner")
+        novo = CustomUser(
+            username="n@example.com", email="n@example.com", user_type="learner"
+        )
         novo.set_password("qualquerpass123")
         self.assertIsNone(novo.password_changed_at)
 
@@ -484,11 +490,17 @@ class RefreshRotationTest(APITestCase):
             self.protected_url, HTTP_AUTHORIZATION=f"Bearer {r.data['access']}"
         )
         self.assertEqual(ok.status_code, status.HTTP_200_OK)
-        self.assertEqual(self._refresh(r.data["refresh"]).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._refresh(r.data["refresh"]).status_code, status.HTTP_200_OK
+        )
 
     def test_old_refresh_still_valid_without_blacklist(self):
-        self.assertEqual(self._refresh(self.old_refresh).status_code, status.HTTP_200_OK)
-        self.assertEqual(self._refresh(self.old_refresh).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._refresh(self.old_refresh).status_code, status.HTTP_200_OK
+        )
+        self.assertEqual(
+            self._refresh(self.old_refresh).status_code, status.HTTP_200_OK
+        )
 
     def test_rotated_refresh_is_revoked_by_password_change(self):
         rotated = self._refresh(self.old_refresh).data["refresh"]
@@ -538,7 +550,9 @@ class StaleBearerOnPublicAuthEndpointsTest(APITestCase):
 
     def test_refresh_with_stale_bearer_succeeds(self):
         refresh = str(RefreshToken.for_user(self.user))
-        r = self.client.post(reverse("token_refresh"), {"refresh": refresh}, **self.STALE)
+        r = self.client.post(
+            reverse("token_refresh"), {"refresh": refresh}, **self.STALE
+        )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_protected_endpoint_still_rejects_stale_bearer(self):

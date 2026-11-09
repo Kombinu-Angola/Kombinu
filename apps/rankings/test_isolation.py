@@ -30,7 +30,9 @@ class RankingIsolationBase(APITestCase):
         self.carla = make_user("carla@test.com", first_name="Carla", last_name="B")
         self.diogo = make_user("diogo@test.com", first_name="Diogo", last_name="M")
         for user, org in (
-            (self.ana, self.org_a), (self.bruno, self.org_a), (self.carla, self.org_b)
+            (self.ana, self.org_a),
+            (self.bruno, self.org_a),
+            (self.carla, self.org_b),
         ):
             Membership.objects.create(user=user, organizacao=org, role="student")
         self._n = 0
@@ -38,8 +40,11 @@ class RankingIsolationBase(APITestCase):
     def xp(self, user, amount, org=None, source="quiz_submission"):
         self._n += 1
         return record_xp(
-            user=user, amount=amount, source_type=source,
-            source_id=f"seed-{self._n}", organizacao=org,
+            user=user,
+            amount=amount,
+            source_type=source,
+            source_id=f"seed-{self._n}",
+            organizacao=org,
         )
 
     def ranking(self, user, **kwargs):
@@ -76,7 +81,9 @@ class RankingIsolationTests(RankingIsolationBase):
         self.xp(self.ana, 40, self.org_a)
         self.xp(self.ana, 25)  # marketplace
 
-        self.assertEqual(self.scores(self.ranking(self.ana, **self.hdr_a)), [("Ana A", 40)])
+        self.assertEqual(
+            self.scores(self.ranking(self.ana, **self.hdr_a)), [("Ana A", 40)]
+        )
         self.assertEqual(self.scores(self.ranking(self.ana)), [("Ana A", 25)])
 
     def test_user_position_is_scoped(self):
@@ -121,8 +128,11 @@ class RankingSourceTests(RankingIsolationBase):
         teacher = make_user("prof@test.com", "creator")
         Membership.objects.create(user=teacher, organizacao=self.org_a, role="teacher")
         content = Content.objects.create(
-            title="C", description="d", creator=teacher,
-            category="tecnologia", organizacao=self.org_a,
+            title="C",
+            description="d",
+            creator=teacher,
+            category="tecnologia",
+            organizacao=self.org_a,
         )
         quiz = Quiz.objects.create(title="Q", content=content, organizacao=self.org_a)
         q = Question.objects.create(quiz=quiz, question_text="?")
@@ -132,16 +142,21 @@ class RankingSourceTests(RankingIsolationBase):
         r = self.client.post(
             reverse("quiz-submit", args=[quiz.id]),
             {"answers": [{"question_id": str(q.id), "selected_option_id": str(ok.id)}]},
-            format="json", **self.hdr_a,
+            format="json",
+            **self.hdr_a,
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
-        self.assertEqual(self.scores(self.ranking(self.ana, **self.hdr_a)), [("Ana A", 10)])
+        self.assertEqual(
+            self.scores(self.ranking(self.ana, **self.hdr_a)), [("Ana A", 10)]
+        )
         self.assertEqual(self.ranking(self.ana)["top_users"], [])  # marketplace vazio
 
     def test_enquete_xp_counts_in_ranking(self):
         self.xp(self.ana, 5, self.org_a, source="enquete_voto")
-        self.assertEqual(self.scores(self.ranking(self.ana, **self.hdr_a)), [("Ana A", 5)])
+        self.assertEqual(
+            self.scores(self.ranking(self.ana, **self.hdr_a)), [("Ana A", 5)]
+        )
 
     def test_submission_without_xpevent_does_not_count(self):
         quiz_owner = make_user("owner@test.com", "creator")
@@ -201,14 +216,21 @@ class DashboardIsolationTests(RankingIsolationBase):
         super().setUp()
         self.teacher_a = make_user("prof-a@test.com", "creator")
         self.market_creator = make_user("mkt@test.com", "creator")
-        Membership.objects.create(user=self.teacher_a, organizacao=self.org_a, role="teacher")
+        Membership.objects.create(
+            user=self.teacher_a, organizacao=self.org_a, role="teacher"
+        )
 
         self.content_a = Content.objects.create(
-            title="Curso A", description="d", creator=self.teacher_a,
-            category="tecnologia", organizacao=self.org_a,
+            title="Curso A",
+            description="d",
+            creator=self.teacher_a,
+            category="tecnologia",
+            organizacao=self.org_a,
         )
         self.content_m = Content.objects.create(
-            title="Curso Mkt", description="d", creator=self.market_creator,
+            title="Curso Mkt",
+            description="d",
+            creator=self.market_creator,
             category="design",
         )
         self.quiz_a = Quiz.objects.create(
@@ -218,7 +240,10 @@ class DashboardIsolationTests(RankingIsolationBase):
 
         # Ana: 60 XP na escola A e 50 XP no marketplace
         self.sub_a = QuizSubmission.objects.create(
-            user=self.ana, quiz=self.quiz_a, score=60, xp_awarded=60,
+            user=self.ana,
+            quiz=self.quiz_a,
+            score=60,
+            xp_awarded=60,
             organizacao=self.org_a,
         )
         self.sub_m = QuizSubmission.objects.create(
@@ -235,9 +260,13 @@ class DashboardIsolationTests(RankingIsolationBase):
 
     def test_learner_stats_are_scoped_but_level_is_global(self):
         a = self.get("learner-stats", self.ana, **self.hdr_a)
-        self.assertEqual((a["totalPoints"], a["quizzesTaken"], a["coursesCompleted"]), (60, 1, 1))
+        self.assertEqual(
+            (a["totalPoints"], a["quizzesTaken"], a["coursesCompleted"]), (60, 1, 1)
+        )
         m = self.get("learner-stats", self.ana)
-        self.assertEqual((m["totalPoints"], m["quizzesTaken"], m["coursesCompleted"]), (50, 1, 1))
+        self.assertEqual(
+            (m["totalPoints"], m["quizzesTaken"], m["coursesCompleted"]), (50, 1, 1)
+        )
         # carteira única: 110 XP no total -> nível 2 em qualquer contexto
         self.assertEqual(a["currentLevel"], 2)
         self.assertEqual(m["currentLevel"], 2)
@@ -250,7 +279,10 @@ class DashboardIsolationTests(RankingIsolationBase):
 
     def test_creator_stats_are_scoped(self):
         QuizSubmission.objects.create(
-            user=self.bruno, quiz=self.quiz_a, score=10, xp_awarded=10,
+            user=self.bruno,
+            quiz=self.quiz_a,
+            score=10,
+            xp_awarded=10,
             organizacao=self.org_a,
         )
         a = self.get("creator-stats", self.teacher_a, **self.hdr_a)

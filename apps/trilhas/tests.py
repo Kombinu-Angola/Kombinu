@@ -21,8 +21,11 @@ def make_user(email, user_type="learner"):
 
 def make_quiz(creator, title, organizacao, n_questions=2):
     content = Content.objects.create(
-        title=f"C {title}", description="d", creator=creator,
-        category="tecnologia", organizacao=organizacao,
+        title=f"C {title}",
+        description="d",
+        creator=creator,
+        category="tecnologia",
+        organizacao=organizacao,
     )
     quiz = Quiz.objects.create(title=title, content=content, organizacao=organizacao)
     for i in range(n_questions):
@@ -49,33 +52,52 @@ class TrilhaBase(APITestCase):
         self.teacher = make_user("prof@test.com", "creator")
         self.student = make_user("aluno@test.com")
         self.student2 = make_user("aluno2@test.com")
-        Membership.objects.create(user=self.teacher, organizacao=self.org, role="teacher")
+        Membership.objects.create(
+            user=self.teacher, organizacao=self.org, role="teacher"
+        )
         for s in (self.student, self.student2):
             Membership.objects.create(user=s, organizacao=self.org, role="student")
         self.hdr = {"HTTP_X_WORKSPACE": str(self.org.id)}
 
         self.read = Content.objects.create(
-            title="Ler capítulo 1", description="Resumo do capítulo",
-            creator=self.teacher, category="tecnologia", organizacao=self.org,
+            title="Ler capítulo 1",
+            description="Resumo do capítulo",
+            creator=self.teacher,
+            category="tecnologia",
+            organizacao=self.org,
         )
         self.read2 = Content.objects.create(
-            title="Ler capítulo 2", description="d",
-            creator=self.teacher, category="tecnologia", organizacao=self.org,
+            title="Ler capítulo 2",
+            description="d",
+            creator=self.teacher,
+            category="tecnologia",
+            organizacao=self.org,
         )
         self.quiz = make_quiz(self.teacher, "Quiz 1", self.org, 2)
         self.exam = make_quiz(self.teacher, "Exame final", self.org, 4)
         self.enquete = Enquete.objects.create(
-            organizacao=self.org, creator=self.teacher, kind="binaria",
-            question="Gostaste?", decision="d", trigger="fim-modulo", sample_target=50,
+            organizacao=self.org,
+            creator=self.teacher,
+            kind="binaria",
+            question="Gostaste?",
+            decision="d",
+            trigger="fim-modulo",
+            sample_target=50,
             state="activa",
         )
         for i, label in enumerate(["Sim", "Não"]):
             EnqueteOpcao.objects.create(enquete=self.enquete, label=label, order=i)
 
         self.trilha = Trilha.objects.create(
-            organizacao=self.org, creator=self.teacher, title="Redes I",
-            headline="Do zero ao routing", subject="Redes", year="2º ano",
-            semester="1º semestre", final_exam=self.exam, is_published=True,
+            organizacao=self.org,
+            creator=self.teacher,
+            title="Redes I",
+            headline="Do zero ao routing",
+            subject="Redes",
+            year="2º ano",
+            semester="1º semestre",
+            final_exam=self.exam,
+            is_published=True,
         )
         self.i1 = TrilhaItem.objects.create(
             trilha=self.trilha, order=1, kind="conteudo", content=self.read, minutes=10
@@ -92,9 +114,7 @@ class TrilhaBase(APITestCase):
 
     def get_trilha(self, user=None):
         self.client.force_authenticate(user or self.student)
-        r = self.client.get(
-            reverse("trilha-detail", args=[self.trilha.id]), **self.hdr
-        )
+        r = self.client.get(reverse("trilha-detail", args=[self.trilha.id]), **self.hdr)
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         return r.data
 
@@ -118,7 +138,9 @@ class TrilhaBase(APITestCase):
             )
         return self.client.post(
             reverse("quiz-submit", args=[quiz.id]),
-            {"answers": answers}, format="json", **self.hdr,
+            {"answers": answers},
+            format="json",
+            **self.hdr,
         )
 
 
@@ -139,8 +161,15 @@ class TrilhaShapeTests(TrilhaBase):
 
     def test_no_adaptive_fields(self):
         blob = str(self.get_trilha())
-        for forbidden in ("multiplier", "gaps", "strengths", "initialAccuracy",
-                          "failureRate", "dataMb", "badge"):
+        for forbidden in (
+            "multiplier",
+            "gaps",
+            "strengths",
+            "initialAccuracy",
+            "failureRate",
+            "dataMb",
+            "badge",
+        ):
             self.assertNotIn(forbidden, blob)
 
     def test_final_exam_is_separate_from_nodes(self):
@@ -152,9 +181,9 @@ class TrilhaShapeTests(TrilhaBase):
 
     def test_potential_xp_per_kind(self):
         nodes = {n["order"]: n for n in self.get_trilha()["nodes"]}
-        self.assertEqual(nodes[1]["xp"], 0)       # conteúdo sem quiz
-        self.assertEqual(nodes[3]["xp"], 20)      # 2 perguntas x 10
-        self.assertEqual(nodes[4]["xp"], 5)       # XP por voto (D13)
+        self.assertEqual(nodes[1]["xp"], 0)  # conteúdo sem quiz
+        self.assertEqual(nodes[3]["xp"], 20)  # 2 perguntas x 10
+        self.assertEqual(nodes[4]["xp"], 5)  # XP por voto (D13)
 
     def test_xp_reward_overrides_computed(self):
         self.i3.xp_reward = 99
@@ -226,7 +255,9 @@ class TrilhaProgressTests(TrilhaBase):
         opt = self.enquete.options.first()
         r = self.client.post(
             reverse("enquete-vote", args=[self.enquete.id]),
-            {"optionId": str(opt.id)}, format="json", **self.hdr,
+            {"optionId": str(opt.id)},
+            format="json",
+            **self.hdr,
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         self.assertEqual(
@@ -252,7 +283,8 @@ class TrilhaProgressTests(TrilhaBase):
         self.client.force_authenticate(self.student)
         r = self.client.post(
             reverse("quiz-submit", args=[self.quiz.id]),
-            {"answers": []}, format="json",  # marketplace: 404 antes de validar
+            {"answers": []},
+            format="json",  # marketplace: 404 antes de validar
         )
         self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
         self.assertFalse(TrilhaProgresso.objects.exists())
@@ -284,7 +316,9 @@ class TrilhaVisibilityTests(TrilhaBase):
         Membership.objects.create(user=outsider, organizacao=self.other_org)
         other_hdr = {"HTTP_X_WORKSPACE": str(self.other_org.id)}
         self.client.force_authenticate(outsider)
-        r = self.client.get(reverse("trilha-detail", args=[self.trilha.id]), **other_hdr)
+        r = self.client.get(
+            reverse("trilha-detail", args=[self.trilha.id]), **other_hdr
+        )
         self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
         r = self.client.post(
             reverse("trilha-item-complete", args=[self.i1.id]), **other_hdr

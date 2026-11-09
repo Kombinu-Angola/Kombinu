@@ -57,9 +57,11 @@ class ContentOwnershipTests(APITestCase):
 
     def test_other_creator_cannot_update_or_delete(self):
         self.client.force_authenticate(self.other)
-        for method, payload in (("put", {
-            "title": "x", "description": "x", "category": "design"}),
-            ("patch", {"title": "x"}), ("delete", None)):
+        for method, payload in (
+            ("put", {"title": "x", "description": "x", "category": "design"}),
+            ("patch", {"title": "x"}),
+            ("delete", None),
+        ):
             r = getattr(self.client, method)(self.detail, payload, format="json")
             self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, method)
         self.content.refresh_from_db()
@@ -84,7 +86,11 @@ class ContentOwnershipTests(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
         r = self.client.post(
             man,
-            {"questions": [{"question": "q", "options": ["a", "b"], "correctAnswer": 0}]},
+            {
+                "questions": [
+                    {"question": "q", "options": ["a", "b"], "correctAnswer": 0}
+                ]
+            },
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
@@ -95,7 +101,11 @@ class ContentOwnershipTests(APITestCase):
         man = reverse("quiz-manual-create", args=[self.content.id])
         r = self.client.post(
             man,
-            {"questions": [{"question": "q", "options": ["a", "b"], "correctAnswer": 0}]},
+            {
+                "questions": [
+                    {"question": "q", "options": ["a", "b"], "correctAnswer": 0}
+                ]
+            },
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
@@ -116,12 +126,20 @@ class ProtectHistoryTests(APITestCase):
         self.client.force_authenticate(self.learner)
         return self.client.post(
             reverse("quiz-submit", args=[self.quiz.id]),
-            {"answers": [{"question_id": str(question.id), "selected_option_id": str(option.id)}]},
+            {
+                "answers": [
+                    {
+                        "question_id": str(question.id),
+                        "selected_option_id": str(option.id),
+                    }
+                ]
+            },
             format="json",
         )
 
     def test_content_with_submissions_cannot_be_deleted(self):
         from apps.quizzes.models import QuizSubmission
+
         self.assertEqual(self._submit().status_code, status.HTTP_200_OK)
         self.client.force_authenticate(self.owner)
         r = self.client.delete(reverse("content-detail", args=[self.content.id]))
@@ -131,6 +149,7 @@ class ProtectHistoryTests(APITestCase):
 
     def test_creator_with_content_cannot_be_deleted(self):
         from django.db.models import ProtectedError
+
         with self.assertRaises(ProtectedError):
             self.owner.delete()
 
@@ -179,11 +198,15 @@ class AuthInstitucionalModelosTests(TestCase):
                 user=u2, organizacao=self.org_a, student_code="2024-0001"
             )
         # O mesmo número noutra escola é outra pessoa.
-        Membership.objects.create(user=u2, organizacao=self.org_b, student_code="2024-0001")
+        Membership.objects.create(
+            user=u2, organizacao=self.org_b, student_code="2024-0001"
+        )
 
     def test_memberships_without_student_code_do_not_collide(self):
         u1, u2 = make_user("a@test.com"), make_user("b@test.com")
-        m1 = Membership.objects.create(user=u1, organizacao=self.org_a, student_code="  ")
+        m1 = Membership.objects.create(
+            user=u1, organizacao=self.org_a, student_code="  "
+        )
         m2 = Membership.objects.create(user=u2, organizacao=self.org_a)
         self.assertIsNone(m1.student_code)
         self.assertIsNone(m2.student_code)

@@ -151,7 +151,11 @@ class InstitutionalLoginTests(APITestCase):
     def test_login_ignores_stale_bearer_header(self):
         r = self.client.post(
             self.url,
-            {"school_code": self.org_a.code, "student_code": "2024-001", "password": PASSWORD},
+            {
+                "school_code": self.org_a.code,
+                "student_code": "2024-001",
+                "password": PASSWORD,
+            },
             format="json",
             HTTP_AUTHORIZATION="Bearer expirado.invalido.x",
         )
@@ -241,7 +245,9 @@ class EmailLoginContractTests(APITestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", r.data)
-        self.assertFalse(CustomUser.objects.filter(email__endswith=".kombinu.invalid").exists())
+        self.assertFalse(
+            CustomUser.objects.filter(email__endswith=".kombinu.invalid").exists()
+        )
 
     def test_email_login_ignores_stale_bearer_header(self):
         r = self.client.post(
@@ -268,7 +274,11 @@ class PasswordChangeGateTests(APITestCase):
         )
         r = self.client.post(
             reverse("auth_institutional_login"),
-            {"school_code": self.org.code, "student_code": "2024-001", "password": PASSWORD},
+            {
+                "school_code": self.org.code,
+                "student_code": "2024-001",
+                "password": PASSWORD,
+            },
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
@@ -315,7 +325,9 @@ class PasswordChangeGateTests(APITestCase):
         self.assertGreaterEqual(self.user.password_changed_at, before)
         self.assertTrue(self.user.check_password("Nova-Password-456"))
 
-        ok = self.client.get(reverse("learner-stats"), **self._auth(r.data["access_token"]))
+        ok = self.client.get(
+            reverse("learner-stats"), **self._auth(r.data["access_token"])
+        )
         self.assertEqual(ok.status_code, status.HTTP_200_OK)
 
         # Os tokens anteriores ficam revogados (simula-se a troca 1 s depois

@@ -5,6 +5,19 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Limpeza: black nos testes e sem drf-yasg (B5)
+
+### Removido
+
+- **`drf-yasg`** do `requirements.txt`. Não era importado nem estava no `INSTALLED_APPS`; a documentação da API é gerada só pelo `drf-spectacular`. Validado num venv novo instalado só a partir do `requirements.txt`: suite completa, `manage.py check` e geração do schema.
+
+### Alterado
+
+- Ficheiros de teste formatados com o `black`. Só formatação, sem mudanças de comportamento.
+- **`drf-spectacular` fixado em `>=0.28,<0.29`** (antes `<1.0`), por decisão do CTO. Uma instalação nova trazia a 0.30, que muda os `operationId` (ex.: `api_auth_login_create` → `auth_login_create`) e as tags do Swagger. Assim, o release não traz mudanças no schema que não testámos.
+
+---
+
 ## [Não Lançado] - Conversão B2B → B2C (B4)
 
 ### Adicionado
