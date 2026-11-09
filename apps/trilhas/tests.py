@@ -67,6 +67,7 @@ class TrilhaBase(APITestCase):
         self.enquete = Enquete.objects.create(
             organizacao=self.org, creator=self.teacher, kind="binaria",
             question="Gostaste?", decision="d", trigger="fim-modulo", sample_target=50,
+            state="activa",
         )
         for i, label in enumerate(["Sim", "Não"]):
             EnqueteOpcao.objects.create(enquete=self.enquete, label=label, order=i)

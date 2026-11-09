@@ -22,10 +22,16 @@ class Enquete(models.Model):
         ("fim-leitura", "Fim de leitura"),
         ("fim-modulo", "Fim de módulo"),
     )
+    # Ciclo de vida (B2): rascunho -> activa (publicada) -> encerrada (fechada).
+    # Os valores mantêm-se por compatibilidade da API; mudam só os rótulos.
+    STATE_DRAFT = "rascunho"
+    STATE_PUBLISHED = "activa"
+    STATE_CLOSED = "encerrada"
+    VISIBLE_STATES = (STATE_PUBLISHED, STATE_CLOSED)
     STATE_CHOICES = (
-        ("rascunho", "Rascunho"),
-        ("activa", "Activa"),
-        ("encerrada", "Encerrada"),
+        (STATE_DRAFT, "Rascunho"),
+        (STATE_PUBLISHED, "Publicada"),
+        (STATE_CLOSED, "Fechada"),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -50,7 +56,7 @@ class Enquete(models.Model):
     sample_target = models.PositiveIntegerField()
     # Semântica a confirmar com o frontend (universo elegível, relatório §2.3).
     segment_size = models.PositiveIntegerField(null=True, blank=True)
-    state = models.CharField(max_length=12, choices=STATE_CHOICES, default="activa")
+    state = models.CharField(max_length=12, choices=STATE_CHOICES, default=STATE_DRAFT)
     # D9: validação legal pendente. A API nunca expõe a identidade do votante.
     anonymous = models.BooleanField(default=True)
     closed_at = models.DateTimeField(null=True, blank=True)

@@ -37,7 +37,7 @@ def create_enquete(*, creator, organizacao, data):
             trigger=data["trigger"],
             sample_target=data["sample_target"],
             segment_size=data.get("segment_size"),
-            state="activa",
+            state=Enquete.STATE_DRAFT,
         )
         for index, label in enumerate(data["options"]):
             EnqueteOpcao.objects.create(
@@ -47,6 +47,29 @@ def create_enquete(*, creator, organizacao, data):
                 # escala: valor numérico 1..n para permitir médias no futuro
                 value=index + 1 if data["kind"] == "escala" else None,
             )
+    return enquete
+
+
+def publish(enquete):
+    """rascunho -> activa. Noutro estado: 409."""
+    with transaction.atomic():
+        enquete = Enquete.objects.select_for_update().get(pk=enquete.pk)
+        if enquete.state != Enquete.STATE_DRAFT:
+            raise EnqueteError("Só um rascunho pode ser publicado.", code="closed")
+        enquete.state = Enquete.STATE_PUBLISHED
+        enquete.save(update_fields=["state"])
+    return enquete
+
+
+def close(enquete):
+    """activa -> encerrada. Noutro estado: 409."""
+    with transaction.atomic():
+        enquete = Enquete.objects.select_for_update().get(pk=enquete.pk)
+        if enquete.state != Enquete.STATE_PUBLISHED:
+            raise EnqueteError("Só uma enquete publicada pode ser fechada.", code="closed")
+        enquete.state = Enquete.STATE_CLOSED
+        enquete.closed_at = timezone.now()
+        enquete.save(update_fields=["state", "closed_at"])
     return enquete
 
 
