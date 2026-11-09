@@ -72,6 +72,7 @@ LOCAL_APPS = [
     "apps.tenancy.apps.TenancyConfig",
     "apps.enquetes.apps.EnquetesConfig",
     "apps.trilhas.apps.TrilhasConfig",
+    "apps.notificacoes.apps.NotificacoesConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_APPS + LOCAL_APPS
@@ -218,6 +219,7 @@ REST_FRAMEWORK = {
         "password_change": "10/hour",
         "provisioning": "30/hour",
         "marketplace_visit": "30/hour",
+        "notifications_unread": "60/min",
     },
     # Nº de proxies à frente da app, para ler o IP do cliente em
     # X-Forwarded-For. Sem valor, o DRF usa o cabeçalho inteiro como chave.

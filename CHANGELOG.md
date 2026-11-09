@@ -23,6 +23,59 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - Notificações por workspace (B3)
+
+### Adicionado
+
+- **App `notificacoes`** com o modelo `Notificacao` (migração `notificacoes/0001`):
+  - `user`, `organizacao` (NULL = marketplace), `category` (`gamificacao | conteudo | conta`), `tone` (`urgente | informativo | neutro`), `title`, `body`, `target_type` + `target_id`, `source_key`, `read_at`, `created_at`;
+  - único por (utilizador, `source_key`), o que torna a geração idempotente;
+  - índice em (utilizador, organização, lida);
+  - só leitura no admin.
+- **Endpoints** (`X-Workspace`; sempre filtrados pelo próprio utilizador **e** por `for_context`):
+  - `GET /api/notifications/` (paginado, `?unread=true`);
+  - `GET /api/notifications/unread-count/` → `{ count }` (throttle `notifications_unread`: 60/min);
+  - `POST /api/notifications/{id}/read/`;
+  - `POST /api/notifications/read-all/` → `{ updated }` (só no contexto activo).
+- O item segue o `AppNotification` do frontend: `{ id, category, tone, title, body, at, read, target }`. O `icon` e o `href` são derivados no frontend a partir de `target: { kind, id }`.
+- **Geração** (`notificacoes/services.py`, na transacção da publicação):
+  - trilha publicada numa escola → alunos activos dessa escola;
+  - enquete publicada numa escola → todos os membros activos;
+  - o criador nunca é notificado;
+  - republicar não duplica.
+
+### Segurança
+
+- **Isolamento:** uma notificação de outro utilizador, de outra escola ou do marketplace nunca aparece na lista nem na contagem, e não pode ser marcada como lida (404). A geração só alcança membros activos da organização onde o conteúdo foi publicado.
+
+### Dívida conhecida
+
+- A geração é síncrona: um INSERT em lote por publicação. Serve para o MVP; com escolas grandes, deve passar para uma fila.
+- Não há difusão no marketplace: publicar no marketplace não notifica ninguém (seria notificar todos os utilizadores).
+- Não há retenção nem limpeza automática das notificações antigas.
+- Sem SSE: o frontend faz polling ao `unread-count`.
+
+### Testes
+
+- 17 testes novos (`apps/notificacoes/tests.py`):
+  - isolamento por utilizador e contexto na lista, na contagem, no read e no read-all;
+  - forma do item e filtro de não lidas;
+  - throttle;
+  - geração só para membros activos da própria escola;
+  - idempotência e marketplace sem difusão;
+  - integração com o `publish` das trilhas e das enquetes.
+- **Contraprova:** sem o filtro de contexto, falham 7 testes; sem o filtro de utilizador, falham 6.
+
+### Corrigido
+
+- **Publicar uma trilha com enquetes em rascunho** passa a dar 400. Antes, os alunos viam um passo que não conseguiam abrir.
+
+### Testes (ambiente)
+
+- `core/settings_test.py` desliga o `SECURE_SSL_REDIRECT`. Com `DEBUG=False` (o default sem `.env`), o cliente de testes recebia 301 em todos os pedidos e a suite falhava.
+
+---
+
 ## [Não Lançado] - Ciclo de vida das Enquetes (B2)
 
 ### Adicionado
