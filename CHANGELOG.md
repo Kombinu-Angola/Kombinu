@@ -5,6 +5,18 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Limpeza: black nos testes e sem drf-yasg (B5)
+
+### Removido
+
+- **`drf-yasg`** do `requirements.txt`. Não era importado nem estava no `INSTALLED_APPS`; a documentação da API é gerada só pelo `drf-spectacular`. Validado num venv novo instalado só a partir do `requirements.txt`: suite completa, `manage.py check` e geração do schema.
+
+### Alterado
+
+- Ficheiros de teste formatados com o `black`. Só formatação, sem mudanças de comportamento.
+
+---
+
 ## [Não Lançado] - Notificações por workspace (B3)
 
 ### Adicionado
