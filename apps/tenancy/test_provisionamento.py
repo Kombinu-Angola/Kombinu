@@ -36,9 +36,15 @@ class ProvisionMembersTests(APITestCase):
         self.admin_a = make_user("admin-a@escola.ao")
         self.admin_b = make_user("admin-b@escola.ao")
         self.teacher_a = make_user("prof-a@escola.ao", "creator")
-        Membership.objects.create(user=self.admin_a, organizacao=self.org_a, role="admin")
-        Membership.objects.create(user=self.admin_b, organizacao=self.org_b, role="admin")
-        Membership.objects.create(user=self.teacher_a, organizacao=self.org_a, role="teacher")
+        Membership.objects.create(
+            user=self.admin_a, organizacao=self.org_a, role="admin"
+        )
+        Membership.objects.create(
+            user=self.admin_b, organizacao=self.org_b, role="admin"
+        )
+        Membership.objects.create(
+            user=self.teacher_a, organizacao=self.org_a, role="teacher"
+        )
 
     def _post(self, user, org, rows, dry_run=False):
         self.client.force_authenticate(user)
@@ -57,8 +63,15 @@ class ProvisionMembersTests(APITestCase):
             self.admin_a,
             self.org_a,
             [
-                {"student_code": " 2024 - 001 ".replace(" - ", "-"), "first_name": "Ana"},
-                {"student_code": "2024-002", "role": "teacher", "academic_year": "10.º"},
+                {
+                    "student_code": " 2024 - 001 ".replace(" - ", "-"),
+                    "first_name": "Ana",
+                },
+                {
+                    "student_code": "2024-002",
+                    "role": "teacher",
+                    "academic_year": "10.º",
+                },
             ],
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
@@ -85,7 +98,9 @@ class ProvisionMembersTests(APITestCase):
         self.assertEqual(user.email, "2024-001@escola-a.kombinu.invalid")
         self.assertTrue(user.must_change_password)
         self.assertIsNotNone(user.password_changed_at)
-        self.assertGreaterEqual(user.temp_password_expires_at, before + timedelta(days=7))
+        self.assertGreaterEqual(
+            user.temp_password_expires_at, before + timedelta(days=7)
+        )
         self.assertLessEqual(
             user.temp_password_expires_at, timezone.now() + timedelta(days=7)
         )
@@ -93,7 +108,9 @@ class ProvisionMembersTests(APITestCase):
         # Nada fica em claro na base de dados.
         self.assertNotIn(accounts["2024-001"]["temporary_password"], user.password)
 
-        teacher = Membership.objects.get(organizacao=self.org_a, student_code="2024-002")
+        teacher = Membership.objects.get(
+            organizacao=self.org_a, student_code="2024-002"
+        )
         self.assertEqual(teacher.role, "teacher")
         self.assertEqual(teacher.academic_year, "10.º")
 
@@ -108,7 +125,11 @@ class ProvisionMembersTests(APITestCase):
         self.client.force_authenticate(None)
         login = self.client.post(
             reverse("auth_institutional_login"),
-            {"school_code": self.org_a.code, "student_code": "2024-010", "password": password},
+            {
+                "school_code": self.org_a.code,
+                "student_code": "2024-010",
+                "password": password,
+            },
             format="json",
         )
         self.assertEqual(login.status_code, status.HTTP_200_OK)
@@ -120,7 +141,13 @@ class ProvisionMembersTests(APITestCase):
         r = self._post(
             self.admin_a,
             self.org_a,
-            [{"student_code": "P-01", "email": " Prof.Nova@Escola.AO ", "role": "teacher"}],
+            [
+                {
+                    "student_code": "P-01",
+                    "email": " Prof.Nova@Escola.AO ",
+                    "role": "teacher",
+                }
+            ],
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         self.assertEqual(r.data["accounts"][0]["email"], "prof.nova@escola.ao")
@@ -176,14 +203,18 @@ class ProvisionMembersTests(APITestCase):
         )
         self.assertEqual(orgs, {self.org_a.id, self.org_b.id})
         self.assertEqual(
-            Membership.objects.get(organizacao=self.org_b, student_code="2024-001").provisioned_by,
+            Membership.objects.get(
+                organizacao=self.org_b, student_code="2024-001"
+            ).provisioned_by,
             self.admin_b,
         )
 
     # --- tudo ou nada e validação --------------------------------------------
     def test_invalid_row_rejects_the_whole_batch(self):
         Membership.objects.create(
-            user=make_user("antigo@escola.ao"), organizacao=self.org_a, student_code="2024-001"
+            user=make_user("antigo@escola.ao"),
+            organizacao=self.org_a,
+            student_code="2024-001",
         )
         r = self._post(
             self.admin_a,
@@ -203,7 +234,10 @@ class ProvisionMembersTests(APITestCase):
             {"student_code": "BOM-1"},  # repetido no lote
             {"student_code": "MAU@1"},  # caracteres inválidos
             {"student_code": "E-1", "email": "ja.existe@escola.ao"},  # D12
-            {"student_code": "E-2", "email": "x@escola-a.kombinu.invalid"},  # domínio reservado
+            {
+                "student_code": "E-2",
+                "email": "x@escola-a.kombinu.invalid",
+            },  # domínio reservado
             {"student_code": "E-3", "email": "dup@escola.ao"},
             {"student_code": "E-4", "email": "DUP@escola.ao"},
         ]
@@ -217,15 +251,22 @@ class ProvisionMembersTests(APITestCase):
         self.assertIn("student_code", by_row[2])
         for row in (3, 4, 6):
             self.assertIn("email", by_row[row])
-        self.assertEqual(CustomUser.objects.filter(email__endswith=".kombinu.invalid").count(), 0)
+        self.assertEqual(
+            CustomUser.objects.filter(email__endswith=".kombinu.invalid").count(), 0
+        )
 
     def test_dry_run_validates_without_creating(self):
-        ok = self._post(self.admin_a, self.org_a, [{"student_code": "D-1"}], dry_run=True)
+        ok = self._post(
+            self.admin_a, self.org_a, [{"student_code": "D-1"}], dry_run=True
+        )
         self.assertEqual(ok.status_code, status.HTTP_200_OK)
         self.assertEqual(ok.data, {"dry_run": True, "rows": 1, "errors": []})
 
         bad = self._post(
-            self.admin_a, self.org_a, [{"student_code": "D-1"}, {"student_code": "D-1"}], dry_run=True
+            self.admin_a,
+            self.org_a,
+            [{"student_code": "D-1"}, {"student_code": "D-1"}],
+            dry_run=True,
         )
         self.assertEqual(bad.status_code, status.HTTP_200_OK)
         self.assertEqual(bad.data["errors"][0]["row"], 1)
@@ -238,7 +279,9 @@ class ProvisionMembersTests(APITestCase):
         r = self._post(self.admin_a, self.org_a, rows)
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("rows", r.data)
-        self.assertFalse(Membership.objects.filter(student_code__startswith="L-").exists())
+        self.assertFalse(
+            Membership.objects.filter(student_code__startswith="L-").exists()
+        )
 
     def test_empty_batch_is_rejected(self):
         r = self._post(self.admin_a, self.org_a, [])
@@ -255,7 +298,9 @@ class CriarAdminOrganizacaoCommandTests(TestCase):
         return out.getvalue()
 
     def test_creates_admin_with_temporary_password(self):
-        out = self._run(self.org.code.lower(), email=" Diretora@Escola.AO ", first_name="Rosa")
+        out = self._run(
+            self.org.code.lower(), email=" Diretora@Escola.AO ", first_name="Rosa"
+        )
         user = CustomUser.objects.get(email="diretora@escola.ao")
         membership = Membership.objects.get(user=user)
         self.assertEqual(membership.organizacao, self.org)
@@ -268,7 +313,9 @@ class CriarAdminOrganizacaoCommandTests(TestCase):
 
     def test_accepts_slug(self):
         self._run("escola-a", email="admin2@escola.ao")
-        self.assertTrue(Membership.objects.filter(role="admin", organizacao=self.org).exists())
+        self.assertTrue(
+            Membership.objects.filter(role="admin", organizacao=self.org).exists()
+        )
 
     def test_rejects_existing_email_technical_domain_and_unknown_org(self):
         make_user("existe@escola.ao")

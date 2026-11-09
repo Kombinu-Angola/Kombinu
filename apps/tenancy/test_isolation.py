@@ -26,10 +26,18 @@ class TenantIsolationTests(APITestCase):
         self.market_creator = make_user("mkt-creator@test.com", "creator")
         self.market_learner = make_user("mkt-learner@test.com")
 
-        Membership.objects.create(user=self.teacher_a, organizacao=self.org_a, role="teacher")
-        Membership.objects.create(user=self.student_a, organizacao=self.org_a, role="student")
-        Membership.objects.create(user=self.teacher_b, organizacao=self.org_b, role="teacher")
-        Membership.objects.create(user=self.student_b, organizacao=self.org_b, role="student")
+        Membership.objects.create(
+            user=self.teacher_a, organizacao=self.org_a, role="teacher"
+        )
+        Membership.objects.create(
+            user=self.student_a, organizacao=self.org_a, role="student"
+        )
+        Membership.objects.create(
+            user=self.teacher_b, organizacao=self.org_b, role="teacher"
+        )
+        Membership.objects.create(
+            user=self.student_b, organizacao=self.org_b, role="student"
+        )
 
         self.content_a = make_content(self.teacher_a, "Conteúdo A", self.org_a)
         self.content_b = make_content(self.teacher_b, "Conteúdo B", self.org_b)
@@ -100,7 +108,9 @@ class TenantIsolationTests(APITestCase):
         url_b = reverse("content-detail", args=[self.content_b.id])
         hdr = self._hdr(self.org_a)
         self.assertEqual(
-            self.client.patch(url_b, {"title": "hack"}, format="json", **hdr).status_code,
+            self.client.patch(
+                url_b, {"title": "hack"}, format="json", **hdr
+            ).status_code,
             status.HTTP_404_NOT_FOUND,
         )
         self.assertEqual(
@@ -151,7 +161,9 @@ class TenantIsolationTests(APITestCase):
             reverse("content-list"), payload, format="json", **self._hdr(self.org_a)
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Content.objects.get(title="Novo").organizacao_id, self.org_a.id)
+        self.assertEqual(
+            Content.objects.get(title="Novo").organizacao_id, self.org_a.id
+        )
 
     def test_student_role_cannot_create_inside_organization(self):
         student_creator = make_user("student-creator@test.com", "creator")
@@ -169,7 +181,11 @@ class TenantIsolationTests(APITestCase):
     # --- papel de criador (D11) --------------------------------------------
     def _manual_quiz(self, user, content, org):
         self.client.force_authenticate(user)
-        body = {"questions": [{"question": "2+2?", "options": ["4", "5"], "correctAnswer": 0}]}
+        body = {
+            "questions": [
+                {"question": "2+2?", "options": ["4", "5"], "correctAnswer": 0}
+            ]
+        }
         return self.client.post(
             reverse("quiz-manual-create", args=[content.id]),
             body,
@@ -252,7 +268,9 @@ class TenantIsolationTests(APITestCase):
         self.client.force_authenticate(self.teacher_a)
         url = reverse("content-detail", args=[self.content_a.id])
         hdr = self._hdr(self.org_a)
-        self.client.patch(url, {"organizacao": str(self.org_b.id)}, format="json", **hdr)
+        self.client.patch(
+            url, {"organizacao": str(self.org_b.id)}, format="json", **hdr
+        )
         self.client.patch(url, {"organizacao": None}, format="json", **hdr)
         self.content_a.refresh_from_db()
         self.assertEqual(self.content_a.organizacao_id, self.org_a.id)
@@ -320,7 +338,9 @@ class TenantIsolationTests(APITestCase):
         content = make_content(dual, "Do dual em B", self.org_b)
         self.client.force_authenticate(dual)
         url = reverse("quiz-manual-create", args=[content.id])
-        body = {"questions": [{"question": "q", "options": ["a", "b"], "correctAnswer": 0}]}
+        body = {
+            "questions": [{"question": "q", "options": ["a", "b"], "correctAnswer": 0}]
+        }
 
         r = self.client.post(url, body, format="json", **self._hdr(self.org_a))
         self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
@@ -329,4 +349,6 @@ class TenantIsolationTests(APITestCase):
         # no contexto certo funciona e o quiz herda a organização do conteúdo
         r = self.client.post(url, body, format="json", **self._hdr(self.org_b))
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Quiz.objects.get(content=content).organizacao_id, self.org_b.id)
+        self.assertEqual(
+            Quiz.objects.get(content=content).organizacao_id, self.org_b.id
+        )
