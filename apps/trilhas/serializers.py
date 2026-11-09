@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from . import services
-from .models import Trilha
+from .models import Trilha, TrilhaItem
 
 
 def _node_title(item):
@@ -32,12 +32,15 @@ class LearningTrailSerializer(serializers.ModelSerializer):
     finalExam = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
     headline = serializers.CharField(read_only=True)
+    isSequential = serializers.BooleanField(source="is_sequential", read_only=True)
+    isPublished = serializers.BooleanField(source="is_published", read_only=True)
+    archivedAt = serializers.DateTimeField(source="archived_at", read_only=True)
 
     class Meta:
         model = Trilha
         fields = (
             "id", "subject", "title", "headline", "year", "semester",
-            "nodes", "finalExam", "progress",
+            "nodes", "finalExam", "progress", "isSequential", "isPublished", "archivedAt",
         )
 
     def _computed(self, obj):
@@ -85,3 +88,51 @@ class LearningTrailSerializer(serializers.ModelSerializer):
             "total": total,
             "percent": round(100.0 * done / total, 1) if total else 0,
         }
+
+
+class TrilhaWriteSerializer(serializers.ModelSerializer):
+    """Criação e edição (B1). `is_published` muda só por `publish/`."""
+
+    isSequential = serializers.BooleanField(source="is_sequential", required=False)
+    finalExamId = serializers.UUIDField(required=False, allow_null=True)
+
+    class Meta:
+        model = Trilha
+        fields = (
+            "title", "headline", "subject", "year", "semester",
+            "isSequential", "finalExamId",
+        )
+
+
+class TrilhaItemWriteSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=TrilhaItem.KIND_CHOICES)
+    targetId = serializers.UUIDField(source="target_id")
+    titleOverride = serializers.CharField(
+        source="title_override", max_length=255, required=False, allow_blank=True
+    )
+    summary = serializers.CharField(required=False, allow_blank=True)
+    minutes = serializers.IntegerField(
+        min_value=0, max_value=32767, required=False, allow_null=True
+    )
+    xpReward = serializers.IntegerField(
+        source="xp_reward", min_value=0, required=False, allow_null=True
+    )
+
+
+class TrilhaItemUpdateSerializer(serializers.ModelSerializer):
+    """Só metadados; para mudar o alvo remove-se o passo e adiciona-se outro."""
+
+    titleOverride = serializers.CharField(
+        source="title_override", max_length=255, required=False, allow_blank=True
+    )
+    xpReward = serializers.IntegerField(
+        source="xp_reward", min_value=0, required=False, allow_null=True
+    )
+
+    class Meta:
+        model = TrilhaItem
+        fields = ("titleOverride", "summary", "minutes", "xpReward")
+
+
+class TrilhaItemReorderSerializer(serializers.Serializer):
+    itemIds = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
