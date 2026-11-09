@@ -228,6 +228,7 @@ backend/
 | `/api/tenancy/members/` | GET | Membros da organização do `X-Workspace` (só admin), paginado; filtros `role`, `is_active`, `search`. Nunca devolve o email técnico |
 | `/api/tenancy/members/{id}/deactivate/` · `/reactivate/` | POST | Desactivar ou reactivar a pertença (a conta e o XP mantêm-se). Um admin não se desactiva a si próprio e a organização mantém sempre um admin activo |
 | `/api/tenancy/members/{id}/reset-password/` | POST | Nova password temporária (7 dias, troca obrigatória), mostrada uma vez; revoga as sessões. Só para contas provisionadas pela organização e sem pertença a outra |
+| `/api/tenancy/marketplace-visit/` | POST | Chamado pelo seletor de workspace ao mudar para o marketplace. Regista a 1.ª entrada no marketplace por escola de origem (idempotente). Responde sempre 204 |
 | `/api/tenancy/members/bulk/` | POST | Provisionamento em lote pelo admin da organização do `X-Workspace`: `{ dry_run, rows: [{ student_code, first_name, last_name, role, academic_year, faculty, course, email }] }`. Tudo ou nada, até `PROVISIONING_MAX_ROWS` linhas (20 por omissão); devolve as passwords temporárias uma única vez |
 
 **Workspace activo (`X-Workspace`):** os endpoints de conteúdos, quizzes,

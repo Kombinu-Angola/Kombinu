@@ -163,3 +163,36 @@ class AuditoriaMembro(models.Model):
 
     def __str__(self):
         return f"{self.organizacao} — {self.action} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+class ConversaoMarketplace(models.Model):
+    """
+    Primeira entrada no marketplace (B2C) de um membro de uma escola (B4).
+    Uma linha por (utilizador, organização de origem), criada pelo endpoint
+    explícito que o seletor de workspace chama. Só leitura no admin; não é
+    exposta ao admin da escola (privacidade, D14).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="conversoes_marketplace",
+    )
+    organizacao = models.ForeignKey(
+        Organizacao, on_delete=models.PROTECT, related_name="conversoes_marketplace"
+    )
+    first_visit_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "conversão para o marketplace"
+        verbose_name_plural = "conversões para o marketplace"
+        ordering = ["-first_visit_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "organizacao"], name="unique_conversao_user_org"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} de {self.organizacao} ({self.first_visit_at:%Y-%m-%d})"

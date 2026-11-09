@@ -218,6 +218,7 @@ REST_FRAMEWORK = {
         "token_refresh": "30/min",
         "password_change": "10/hour",
         "provisioning": "30/hour",
+        "marketplace_visit": "30/hour",
         "notifications_unread": "60/min",
     },
     # Nº de proxies à frente da app, para ler o IP do cliente em

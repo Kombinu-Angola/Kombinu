@@ -17,6 +17,24 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - Conversão B2B → B2C (B4)
+
+### Adicionado
+
+- **`POST /api/tenancy/marketplace-visit/`** (autenticado, sem corpo): o seletor de workspace do frontend chama-o ao mudar para o marketplace. Regista a primeira entrada no marketplace por cada escola de origem em que o utilizador é membro activo. É idempotente e responde sempre 204, incluindo para quem não pertence a nenhuma escola. Throttle `marketplace_visit`: 30/hora por utilizador (provisório).
+- **`ConversaoMarketplace`** (migração `tenancy/0006`, aditiva): `user`, `organizacao` de origem, `first_visit_at`, único por (utilizador, organização). Só leitura no Django admin.
+- **Porquê um endpoint explícito em vez de registar em cada pedido:** não acrescenta escritas ao tráfego normal; evita falsos positivos (um pedido sem `X-Workspace` cai no marketplace por omissão); e não mexe no `resolve_workspace`.
+
+### Segurança
+
+- Os dados não são expostos ao admin da escola (que alunos visitaram o marketplace), por privacidade (ver D14). Uma métrica agregada fica para depois.
+
+### Testes
+
+- 10 testes novos (`apps/tenancy/test_conversao.py`): idempotência, uma linha por escola, pertença ou organização inactiva ignoradas, só o próprio utilizador, o header não muda o resultado, 401, 405 e throttle.
+
+---
+
 ## [Não Lançado] - Notificações por workspace (B3)
 
 ### Adicionado

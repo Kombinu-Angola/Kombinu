@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import AuditoriaMembro, Membership, Organizacao, ProvisionamentoLote
+from .models import (
+    AuditoriaMembro,
+    ConversaoMarketplace,
+    Membership,
+    Organizacao,
+    ProvisionamentoLote,
+)
 
 
 @admin.register(Organizacao)
@@ -34,6 +40,19 @@ class AuditoriaMembroAdmin(admin.ModelAdmin):
     list_display = ("organizacao", "action", "actor", "membership", "created_at")
     list_filter = ("organizacao", "action")
     readonly_fields = ("organizacao", "action", "actor", "membership", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ConversaoMarketplace)
+class ConversaoMarketplaceAdmin(admin.ModelAdmin):
+    list_display = ("user", "organizacao", "first_visit_at")
+    list_filter = ("organizacao",)
+    readonly_fields = ("user", "organizacao", "first_visit_at")
 
     def has_add_permission(self, request):
         return False
