@@ -5,6 +5,8 @@ e conclusão de itens.
 from django.db import transaction
 from django.utils import timezone
 
+from apps.notificacoes.services import notify_trilha_published
+
 from .models import TrilhaItem, TrilhaProgresso
 
 # XP por resposta correcta num quiz. Hoje vive hardcoded em QuizSubmissionView;
@@ -267,4 +269,5 @@ def publish_trilha(trilha):
         if not trilha.is_published:
             trilha.is_published = True
             trilha.save(update_fields=["is_published"])
+            notify_trilha_published(trilha)
     return trilha

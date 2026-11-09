@@ -226,3 +226,50 @@ class GenerationTests(APITestCase):
     def test_marketplace_does_not_broadcast(self):
         self.assertEqual(services.notify_trilha_published(self.trilha(None)), 0)
         self.assertFalse(Notificacao.objects.exists())
+
+
+class TrilhaPublishIntegrationTests(APITestCase):
+    """Publicar uma trilha pela API notifica os alunos da escola, uma vez."""
+
+    def test_publish_notifies_school_students_once(self):
+        from apps.contents.models import Content
+        from apps.trilhas.models import Trilha, TrilhaItem
+
+        org = Organizacao.objects.create(name="Escola", slug="escola")
+        org_b = Organizacao.objects.create(name="Outra", slug="outra")
+        teacher = make_user("prof@test.com", "creator")
+        student = make_user("s@test.com")
+        foreign = make_user("f@test.com")
+        Membership.objects.create(user=teacher, organizacao=org, role="teacher")
+        Membership.objects.create(user=student, organizacao=org, role="student")
+        Membership.objects.create(user=foreign, organizacao=org_b, role="student")
+        content = Content.objects.create(
+            title="C",
+            description="d",
+            creator=teacher,
+            category="tecnologia",
+            organizacao=org,
+        )
+        trilha = Trilha.objects.create(
+            organizacao=org, creator=teacher, title="Redes I", subject="Redes"
+        )
+        TrilhaItem.objects.create(
+            trilha=trilha, order=1, kind="conteudo", content=content
+        )
+
+        self.client.force_authenticate(teacher)
+        hdr = {"HTTP_X_WORKSPACE": str(org.id)}
+        url = reverse("trilha-publish", args=[trilha.pk])
+        self.assertEqual(self.client.post(url, **hdr).status_code, 200)
+        self.assertEqual(self.client.post(url, **hdr).status_code, 200)
+
+        notes = list(Notificacao.objects.all())
+        self.assertEqual([n.user_id for n in notes], [student.pk])
+        self.assertEqual(notes[0].organizacao_id, org.id)
+        self.assertEqual(
+            (notes[0].target_type, notes[0].target_id), ("trilha", trilha.pk)
+        )
+
+        self.client.force_authenticate(student)
+        r = self.client.get(reverse("notification-unread-count"), **hdr)
+        self.assertEqual(r.data["count"], 1)
