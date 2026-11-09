@@ -1,5 +1,6 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -27,15 +28,27 @@ ERROR_STATUS = {
 class _EnqueteBase(WorkspaceScopedMixin):
     permission_classes = [IsAuthenticated]
 
-    def get_enquete(self, enquete_id):
+    def visible_enquetes(self):
+        """Publicadas e fechadas do workspace, mais os rascunhos do próprio criador."""
         qs = self.scope(Enquete.objects.prefetch_related("options"))
-        return get_object_or_404(qs, pk=enquete_id)
+        return qs.filter(
+            Q(state__in=Enquete.VISIBLE_STATES) | Q(creator=self.request.user)
+        )
+
+    def get_enquete(self, enquete_id):
+        return get_object_or_404(self.visible_enquetes(), pk=enquete_id)
+
+    def get_own_enquete(self, enquete_id):
+        enquete = self.get_enquete(enquete_id)
+        if enquete.creator_id != self.request.user.pk:
+            raise PermissionDenied("Só o criador pode alterar esta enquete.")
+        return enquete
 
 
 class EnqueteListCreateView(_EnqueteBase, generics.ListCreateAPIView):
     """
-    GET: enquetes activas do workspace (mais as do próprio criador).
-    POST: cria uma enquete a partir de SurveyDraft; fica `activa`.
+    GET: enquetes publicadas e fechadas do workspace (mais as do próprio criador).
+    POST: cria uma enquete a partir de SurveyDraft; fica em `rascunho`.
     """
 
     def get_serializer_class(self):
@@ -44,10 +57,7 @@ class EnqueteListCreateView(_EnqueteBase, generics.ListCreateAPIView):
         return EnqueteVoterSerializer
 
     def get_queryset(self):
-        qs = self.scope(Enquete.objects.prefetch_related("options"))
-        return qs.filter(Q(state="activa") | Q(creator=self.request.user)).order_by(
-            "-created_at"
-        )
+        return self.visible_enquetes().order_by("-created_at")
 
     def create(self, request, *args, **kwargs):
         if not can_create_in(request.user, self.workspace):
@@ -72,6 +82,28 @@ class EnqueteDetailView(_EnqueteBase, APIView):
             else EnqueteVoterSerializer
         )
         return Response(cls(enquete, context={"request": request}).data)
+
+
+class _EnqueteTransitionView(_EnqueteBase, APIView):
+    transition = None
+
+    @extend_schema(request=None, responses={200: EnqueteOwnerSerializer})
+    def post(self, request, id):
+        enquete = self.get_own_enquete(id)
+        try:
+            enquete = type(self).transition(enquete)
+        except services.EnqueteError as exc:
+            return Response({"error": str(exc)}, status=ERROR_STATUS[exc.code])
+        enquete = self.get_enquete(enquete.pk)
+        return Response(EnqueteOwnerSerializer(enquete, context={"request": request}).data)
+
+
+class EnquetePublishView(_EnqueteTransitionView):
+    transition = staticmethod(services.publish)
+
+
+class EnqueteCloseView(_EnqueteTransitionView):
+    transition = staticmethod(services.close)
 
 
 class EnqueteVoteView(_EnqueteBase, APIView):

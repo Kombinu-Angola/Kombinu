@@ -23,6 +23,49 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - Ciclo de vida das Enquetes (B2)
+
+### Adicionado
+
+- **`POST /api/enquetes/{id}/publish/`** (`rascunho` → `activa`) e **`POST /api/enquetes/{id}/close/`** (`activa` → `encerrada`, preenche `closedAt`). Só o criador; qualquer outra transição dá 409. Devolvem a vista do criador. O fecho automático ao atingir `sampleTarget` mantém-se.
+
+### Alterado
+
+- **`POST /api/enquetes/` passa a criar em `rascunho`** (antes ficava `activa`). É preciso publicar para que os alunos a vejam e votem.
+- Os valores de `state` mantêm-se (`rascunho`, `activa`, `encerrada`); mudam só os rótulos (Publicada, Fechada). Migração `enquetes/0002`: só muda o default para `rascunho`. As enquetes que já existem continuam `activa`, sem migração de dados.
+- A listagem mostra as enquetes publicadas **e as fechadas** (antes só as activas), mais os rascunhos do próprio criador.
+
+### Segurança
+
+- **Rascunho de enquete visível a outros membros:** o detalhe, o `shown`, o `dismiss` e os resultados procuravam a enquete só pelo workspace, sem olhar ao estado. Um membro do mesmo workspace conseguia abrir o rascunho de outro e registar exibições. Passam a dar 404 para rascunhos alheios.
+
+### Testes
+
+- 14 testes novos (`apps/enquetes/test_ciclo_de_vida.py`): transições e 409, só o criador, votar em rascunho ou em enquete fechada, visibilidade por papel, rascunho alheio → 404 (falha sem a correcção), e isolamento entre escolas e com o marketplace.
+
+---
+
+## [Não Lançado] - Autoria de Trilhas (B1)
+
+### Adicionado
+
+- **Criar e editar trilhas:** `POST /api/trilhas/` (teacher/admin na organização do `X-Workspace`, `creator` no marketplace; nasce rascunho) e `PATCH /api/trilhas/{id}/` (`title, headline, subject, year, semester, isSequential, finalExamId`). Só o criador altera a trilha: 403 se a vê, 404 se não a vê.
+- **`POST /api/trilhas/{id}/publish/`:** publica (exige pelo menos um passo; idempotente). `is_published` deixa de ser editável por outra via.
+- **`DELETE /api/trilhas/{id}/`:** 204, ou **409** se algum aluno já tem progresso (o histórico não se apaga, como no Content).
+- **Gestão de passos:** `POST /api/trilhas/{id}/items/` (acrescenta no fim), `PATCH`/`DELETE /api/trilhas/{id}/items/{itemId}/` (metadados; remover compacta a ordem, 409 com progresso) e `POST /api/trilhas/{id}/items/reorder/` (`{ itemIds }`, permutação completa; duas passagens por causa do unique não deferível).
+- **Arquivar:** `POST /api/trilhas/{id}/archive/` e `/unarchive/` (criador; idempotentes). Campo novo `Trilha.archived_at` (migração `trilhas/0002`, aditiva). Uma trilha arquivada sai da listagem e do detalhe para os alunos; o criador continua a vê-la e o progresso mantém-se.
+- `LearningTrailSerializer`: campos só de leitura `isSequential`, `isPublished` e `archivedAt` (aditivos).
+
+### Segurança
+
+- **Isolamento:** o alvo de um passo (conteúdo, quiz, enquete) e o exame final são procurados só no contexto da trilha (`for_context`). Um alvo de outra escola, do marketplace numa trilha escolar (ou o contrário) ou inexistente dá o mesmo 400 (`targetId`/`finalExamId`), sem revelar o que existe noutro contexto. Uma enquete em rascunho de outro autor também é recusada.
+
+### Testes
+
+- 36 testes novos (`apps/trilhas/test_autoria.py`): isolamento entre escolas e entre escola e marketplace (itens, exame, edição, apagar, arquivar, passos), permissões por papel e autoria, 409 com progresso, publicação, arquivo, reordenação e validações.
+
+---
+
 ## [Não Lançado] - Auth institucional (6/6): gestão de membros
 
 ### Adicionado
