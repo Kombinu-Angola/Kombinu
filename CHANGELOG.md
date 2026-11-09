@@ -5,6 +5,26 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Autoria de Trilhas (B1)
+
+### Adicionado
+
+- **Criar e editar trilhas:** `POST /api/trilhas/` (teacher/admin na organização do `X-Workspace`, `creator` no marketplace; nasce rascunho) e `PATCH /api/trilhas/{id}/` (`title, headline, subject, year, semester, isSequential, finalExamId`). Só o criador altera a trilha: 403 se a vê, 404 se não a vê.
+- **`POST /api/trilhas/{id}/publish/`:** publica (exige pelo menos um passo; idempotente). `is_published` deixa de ser editável por outra via.
+- **`DELETE /api/trilhas/{id}/`:** 204, ou **409** se algum aluno já tem progresso (o histórico não se apaga, como no Content).
+- **Gestão de passos:** `POST /api/trilhas/{id}/items/` (acrescenta no fim), `PATCH`/`DELETE /api/trilhas/{id}/items/{itemId}/` (metadados; remover compacta a ordem, 409 com progresso) e `POST /api/trilhas/{id}/items/reorder/` (`{ itemIds }`, permutação completa; duas passagens por causa do unique não deferível).
+- `LearningTrailSerializer`: campos só de leitura `isSequential` e `isPublished` (aditivos).
+
+### Segurança
+
+- **Isolamento:** o alvo de um passo (conteúdo, quiz, enquete) e o exame final são procurados só no contexto da trilha (`for_context`). Um alvo de outra escola, do marketplace numa trilha escolar (ou o contrário) ou inexistente dá o mesmo 400 (`targetId`/`finalExamId`), sem revelar o que existe noutro contexto. Uma enquete em rascunho de outro autor também é recusada.
+
+### Testes
+
+- 32 testes novos (`apps/trilhas/test_autoria.py`): isolamento entre escolas e entre escola e marketplace (itens, exame, edição, apagar, passos), permissões por papel e autoria, 409 com progresso, publicação, reordenação e validações.
+
+---
+
 ## [Não Lançado] - Auth institucional (6/6): gestão de membros
 
 ### Adicionado
