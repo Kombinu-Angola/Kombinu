@@ -17,7 +17,12 @@ from apps.accounts.institutional import (
 from apps.accounts.models import CustomUser
 
 from .codes import is_valid_student_code, normalize_student_code
-from .models import AuditoriaMembro, Membership, ProvisionamentoLote
+from .models import (
+    AuditoriaMembro,
+    ConversaoMarketplace,
+    Membership,
+    ProvisionamentoLote,
+)
 
 
 class ProvisioningError(Exception):
@@ -262,3 +267,21 @@ def reset_member_password(*, admin, membership):
             action="reset_password",
         )
     return password, expires_at
+
+
+def record_marketplace_visit(user):
+    """
+    Regista a 1.ª entrada no marketplace por cada escola de origem em que o
+    utilizador é membro activo. Idempotente (unique + ignore_conflicts).
+    Devolve quantas pertenças foram consideradas.
+    """
+    org_ids = list(
+        Membership.objects.filter(
+            user=user, is_active=True, organizacao__is_active=True
+        ).values_list("organizacao_id", flat=True)
+    )
+    ConversaoMarketplace.objects.bulk_create(
+        [ConversaoMarketplace(user=user, organizacao_id=org_id) for org_id in org_ids],
+        ignore_conflicts=True,
+    )
+    return len(org_ids)
