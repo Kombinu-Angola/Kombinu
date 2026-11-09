@@ -221,6 +221,10 @@ backend/
 | `/api/trilhas/{id}/items/` | POST | Acrescentar um passo `{ kind, targetId, titleOverride?, summary?, minutes?, xpReward? }`; o alvo tem de ser do mesmo workspace da trilha |
 | `/api/trilhas/{id}/items/{itemId}/` | PATCH/DELETE | Editar metadados ou remover um passo (409 se tem progresso) |
 | `/api/trilhas/{id}/items/reorder/` | POST | `{ itemIds: [...] }` com todos os passos pela nova ordem |
+| `/api/notifications/` | GET | Notificações do próprio utilizador no `X-Workspace` activo (escola → só dessa escola; marketplace → só do marketplace), paginadas; `?unread=true`. Item: `{ id, category, tone, title, body, at, read, target: { kind, id } \| null }` |
+| `/api/notifications/unread-count/` | GET | `{ count }` no contexto activo. Para polling (sugestão: 60 s); throttle 60/min |
+| `/api/notifications/{id}/read/` | POST | Marcar como lida (idempotente). De outro utilizador ou contexto → 404 |
+| `/api/notifications/read-all/` | POST | Marcar todas como lidas, só no contexto activo → `{ updated }` |
 | `/api/tenancy/members/` | GET | Membros da organização do `X-Workspace` (só admin), paginado; filtros `role`, `is_active`, `search`. Nunca devolve o email técnico |
 | `/api/tenancy/members/{id}/deactivate/` · `/reactivate/` | POST | Desactivar ou reactivar a pertença (a conta e o XP mantêm-se). Um admin não se desactiva a si próprio e a organização mantém sempre um admin activo |
 | `/api/tenancy/members/{id}/reset-password/` | POST | Nova password temporária (7 dias, troca obrigatória), mostrada uma vez; revoga as sessões. Só para contas provisionadas pela organização e sem pertença a outra |

@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 
+from apps.notificacoes.services import notify_enquete_published
 from apps.rankings.models import XPEvent
 from apps.rankings.services import record_xp
 from apps.tenancy.models import Membership
@@ -58,6 +59,7 @@ def publish(enquete):
             raise EnqueteError("Só um rascunho pode ser publicado.", code="closed")
         enquete.state = Enquete.STATE_PUBLISHED
         enquete.save(update_fields=["state"])
+        notify_enquete_published(enquete)
     return enquete
 
 
