@@ -273,3 +273,38 @@ class TrilhaPublishIntegrationTests(APITestCase):
         self.client.force_authenticate(student)
         r = self.client.get(reverse("notification-unread-count"), **hdr)
         self.assertEqual(r.data["count"], 1)
+
+
+class EnquetePublishIntegrationTests(APITestCase):
+    """Publicar uma enquete pela API notifica os membros da escola, excepto o criador."""
+
+    def test_publish_notifies_members(self):
+        from apps.enquetes.models import Enquete
+
+        org = Organizacao.objects.create(name="Escola", slug="escola")
+        teacher = make_user("prof@test.com", "creator")
+        colleague = make_user("prof2@test.com", "creator")
+        student = make_user("s@test.com")
+        Membership.objects.create(user=teacher, organizacao=org, role="teacher")
+        Membership.objects.create(user=colleague, organizacao=org, role="teacher")
+        Membership.objects.create(user=student, organizacao=org, role="student")
+        enquete = Enquete.objects.create(
+            organizacao=org,
+            creator=teacher,
+            kind="binaria",
+            question="Gostaste?",
+            decision="d",
+            trigger="fim-modulo",
+            sample_target=5,
+        )
+        self.client.force_authenticate(teacher)
+        hdr = {"HTTP_X_WORKSPACE": str(org.id)}
+        r = self.client.post(reverse("enquete-publish", args=[enquete.pk]), **hdr)
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(
+            set(Notificacao.objects.values_list("user_id", flat=True)),
+            {colleague.pk, student.pk},
+        )
+        n = Notificacao.objects.get(user=student)
+        self.assertEqual((n.target_type, n.target_id), ("enquete", enquete.pk))
+        self.assertEqual(n.organizacao_id, org.id)
