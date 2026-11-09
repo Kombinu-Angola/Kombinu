@@ -5,6 +5,28 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Ciclo de vida das Enquetes (B2)
+
+### Adicionado
+
+- **`POST /api/enquetes/{id}/publish/`** (`rascunho` → `activa`) e **`POST /api/enquetes/{id}/close/`** (`activa` → `encerrada`, preenche `closedAt`). Só o criador; qualquer outra transição dá 409. Devolvem a vista do criador. O fecho automático ao atingir `sampleTarget` mantém-se.
+
+### Alterado
+
+- **`POST /api/enquetes/` passa a criar em `rascunho`** (antes ficava `activa`). É preciso publicar para que os alunos a vejam e votem.
+- Os valores de `state` mantêm-se (`rascunho`, `activa`, `encerrada`); mudam só os rótulos (Publicada, Fechada). Migração `enquetes/0002`: só muda o default para `rascunho`. As enquetes que já existem continuam `activa`, sem migração de dados.
+- A listagem mostra as enquetes publicadas **e as fechadas** (antes só as activas), mais os rascunhos do próprio criador.
+
+### Segurança
+
+- **Rascunho de enquete visível a outros membros:** o detalhe, o `shown`, o `dismiss` e os resultados procuravam a enquete só pelo workspace, sem olhar ao estado. Um membro do mesmo workspace conseguia abrir o rascunho de outro e registar exibições. Passam a dar 404 para rascunhos alheios.
+
+### Testes
+
+- 14 testes novos (`apps/enquetes/test_ciclo_de_vida.py`): transições e 409, só o criador, votar em rascunho ou em enquete fechada, visibilidade por papel, rascunho alheio → 404 (falha sem a correcção), e isolamento entre escolas e com o marketplace.
+
+---
+
 ## [Não Lançado] - Autoria de Trilhas (B1)
 
 ### Adicionado

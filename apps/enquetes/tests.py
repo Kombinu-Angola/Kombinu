@@ -46,13 +46,17 @@ class EnqueteBase(APITestCase):
             self.students.append(u)
         self.hdr = {"HTTP_X_WORKSPACE": str(self.org.id)}
 
-    def create_enquete(self, **overrides):
+    def create_enquete(self, publish=True, **overrides):
         self.client.force_authenticate(self.teacher)
         r = self.client.post(
             reverse("enquete-list"), draft(**overrides), format="json", **self.hdr
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
-        return r.data
+        if not publish:
+            return r.data
+        p = self.client.post(reverse("enquete-publish", args=[r.data["id"]]), **self.hdr)
+        self.assertEqual(p.status_code, status.HTTP_200_OK, p.data)
+        return p.data
 
     def vote(self, user, enquete, option_index, **extra):
         self.client.force_authenticate(user)
@@ -67,12 +71,12 @@ class EnqueteBase(APITestCase):
 
 class EnqueteCreateTests(EnqueteBase):
     def test_create_matches_survey_draft_shape(self):
-        data = self.create_enquete()
+        data = self.create_enquete(publish=False)
         self.assertEqual(data["kind"], "escolha")
         self.assertEqual(data["trigger"], "fim-simulado")
         self.assertEqual(data["sampleTarget"], 100)
         self.assertEqual(data["segmentSize"], 300)
-        self.assertEqual(data["state"], "activa")
+        self.assertEqual(data["state"], "rascunho")
         self.assertEqual(
             [o["label"] for o in data["options"]], ["Presencial", "Online", "Misto"]
         )
