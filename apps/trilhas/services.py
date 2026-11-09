@@ -266,6 +266,11 @@ def publish_trilha(trilha):
         trilha = _lock(trilha)
         if not trilha.items.exists():
             raise TrilhaError("Adiciona pelo menos um passo antes de publicar.")
+        # Os alunos não abrem enquetes em rascunho: o passo ficaria inacessível.
+        if trilha.items.filter(kind="enquete", enquete__state="rascunho").exists():
+            raise TrilhaError(
+                "Publica primeiro as enquetes desta trilha que estão em rascunho."
+            )
         if not trilha.is_published:
             trilha.is_published = True
             trilha.save(update_fields=["is_published"])

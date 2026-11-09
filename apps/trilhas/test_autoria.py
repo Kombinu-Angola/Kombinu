@@ -507,3 +507,29 @@ class TrilhaArchiveTests(AutoriaBase):
         self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
         self.trilha.refresh_from_db()
         self.assertIsNone(self.trilha.archived_at)
+
+
+class TrilhaPublishDraftEnqueteTests(AutoriaBase):
+    def test_publish_rejects_trilha_with_draft_enquete(self):
+        created = self.create_trilha()
+        trilha = Trilha.objects.get(pk=created.data["id"])
+        draft = Enquete.objects.create(
+            organizacao=self.org,
+            creator=self.teacher,
+            kind="binaria",
+            question="?",
+            decision="d",
+            trigger="fim-modulo",
+            sample_target=5,
+            state="rascunho",
+        )
+        self.assertEqual(self.add_item(trilha, "enquete", draft).status_code, 201)
+        url = reverse("trilha-publish", args=[trilha.pk])
+        r = self.client.post(url, **self.hdr)
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        trilha.refresh_from_db()
+        self.assertFalse(trilha.is_published)
+
+        draft.state = "activa"
+        draft.save()
+        self.assertEqual(self.client.post(url, **self.hdr).status_code, 200)
