@@ -215,6 +215,7 @@ backend/
 | `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho |
 | `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
 | `/api/trilhas/{id}/publish/` | POST | Publicar (exige pelo menos um passo) |
+| `/api/trilhas/{id}/archive/` · `/unarchive/` | POST | Arquivar ou desarquivar (criador). Arquivada, sai das listagens dos alunos; o progresso mantém-se |
 | `/api/trilhas/{id}/items/` | POST | Acrescentar um passo `{ kind, targetId, titleOverride?, summary?, minutes?, xpReward? }`; o alvo tem de ser do mesmo workspace da trilha |
 | `/api/trilhas/{id}/items/{itemId}/` | PATCH/DELETE | Editar metadados ou remover um passo (409 se tem progresso) |
 | `/api/trilhas/{id}/items/reorder/` | POST | `{ itemIds: [...] }` com todos os passos pela nova ordem |

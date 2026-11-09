@@ -13,7 +13,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - **`POST /api/trilhas/{id}/publish/`:** publica (exige pelo menos um passo; idempotente). `is_published` deixa de ser editável por outra via.
 - **`DELETE /api/trilhas/{id}/`:** 204, ou **409** se algum aluno já tem progresso (o histórico não se apaga, como no Content).
 - **Gestão de passos:** `POST /api/trilhas/{id}/items/` (acrescenta no fim), `PATCH`/`DELETE /api/trilhas/{id}/items/{itemId}/` (metadados; remover compacta a ordem, 409 com progresso) e `POST /api/trilhas/{id}/items/reorder/` (`{ itemIds }`, permutação completa; duas passagens por causa do unique não deferível).
-- `LearningTrailSerializer`: campos só de leitura `isSequential` e `isPublished` (aditivos).
+- **Arquivar:** `POST /api/trilhas/{id}/archive/` e `/unarchive/` (criador; idempotentes). Campo novo `Trilha.archived_at` (migração `trilhas/0002`, aditiva). Uma trilha arquivada sai da listagem e do detalhe para os alunos; o criador continua a vê-la e o progresso mantém-se.
+- `LearningTrailSerializer`: campos só de leitura `isSequential`, `isPublished` e `archivedAt` (aditivos).
 
 ### Segurança
 
@@ -21,7 +22,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Testes
 
-- 32 testes novos (`apps/trilhas/test_autoria.py`): isolamento entre escolas e entre escola e marketplace (itens, exame, edição, apagar, passos), permissões por papel e autoria, 409 com progresso, publicação, reordenação e validações.
+- 36 testes novos (`apps/trilhas/test_autoria.py`): isolamento entre escolas e entre escola e marketplace (itens, exame, edição, apagar, arquivar, passos), permissões por papel e autoria, 409 com progresso, publicação, arquivo, reordenação e validações.
 
 ---
 
