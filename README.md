@@ -214,6 +214,13 @@ backend/
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
 | `/api/enquetes/` | GET/POST | Enquetes do `X-Workspace`: publicadas e fechadas, mais os rascunhos do próprio. POST (teacher/admin; `creator` no marketplace) cria em `rascunho` |
 | `/api/enquetes/{id}/publish/` · `/close/` | POST | Criador: `rascunho` → `activa` (publicada) → `encerrada` (fechada). Transição inválida → 409. Só se vota em `activa` |
+| `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho |
+| `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
+| `/api/trilhas/{id}/publish/` | POST | Publicar (exige pelo menos um passo) |
+| `/api/trilhas/{id}/archive/` · `/unarchive/` | POST | Arquivar ou desarquivar (criador). Arquivada, sai das listagens dos alunos; o progresso mantém-se |
+| `/api/trilhas/{id}/items/` | POST | Acrescentar um passo `{ kind, targetId, titleOverride?, summary?, minutes?, xpReward? }`; o alvo tem de ser do mesmo workspace da trilha |
+| `/api/trilhas/{id}/items/{itemId}/` | PATCH/DELETE | Editar metadados ou remover um passo (409 se tem progresso) |
+| `/api/trilhas/{id}/items/reorder/` | POST | `{ itemIds: [...] }` com todos os passos pela nova ordem |
 | `/api/tenancy/members/` | GET | Membros da organização do `X-Workspace` (só admin), paginado; filtros `role`, `is_active`, `search`. Nunca devolve o email técnico |
 | `/api/tenancy/members/{id}/deactivate/` · `/reactivate/` | POST | Desactivar ou reactivar a pertença (a conta e o XP mantêm-se). Um admin não se desactiva a si próprio e a organização mantém sempre um admin activo |
 | `/api/tenancy/members/{id}/reset-password/` | POST | Nova password temporária (7 dias, troca obrigatória), mostrada uma vez; revoga as sessões. Só para contas provisionadas pela organização e sem pertença a outra |

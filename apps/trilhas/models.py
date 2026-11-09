@@ -39,6 +39,8 @@ class Trilha(models.Model):
     )
     is_sequential = models.BooleanField(default=True)
     is_published = models.BooleanField(default=False)
+    # Arquivada: sai das listagens dos alunos; o progresso mantém-se.
+    archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = OrganizacaoQuerySet.as_manager()
