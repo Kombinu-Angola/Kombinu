@@ -212,3 +212,27 @@ class MemberPasswordResetView(_MemberActionView):
         )
         response["Cache-Control"] = "no-store"
         return response
+
+
+class MarketplaceVisitRateThrottle(UserRateThrottle):
+    scope = "marketplace_visit"
+
+
+class MarketplaceVisitView(APIView):
+    """
+    Chamado pelo seletor de workspace ao mudar para o marketplace (B4). Regista
+    a conversão B2B -> B2C por escola de origem. Responde sempre 204, incluindo
+    para quem não pertence a nenhuma escola, para não revelar nada.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [MarketplaceVisitRateThrottle]
+
+    @extend_schema(
+        summary="Registar entrada no marketplace",
+        request=None,
+        responses={204: OpenApiResponse(description="Registado (ou nada a registar).")},
+    )
+    def post(self, request):
+        services.record_marketplace_visit(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

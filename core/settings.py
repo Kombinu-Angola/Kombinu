@@ -217,6 +217,7 @@ REST_FRAMEWORK = {
         "token_refresh": "30/min",
         "password_change": "10/hour",
         "provisioning": "30/hour",
+        "marketplace_visit": "30/hour",
     },
     # Nº de proxies à frente da app, para ler o IP do cliente em
     # X-Forwarded-For. Sem valor, o DRF usa o cabeçalho inteiro como chave.

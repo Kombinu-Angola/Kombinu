@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    MarketplaceVisitView,
     MemberDeactivateView,
     MemberListView,
     MemberPasswordResetView,
@@ -9,6 +10,11 @@ from .views import (
 )
 
 urlpatterns = [
+    path(
+        "marketplace-visit/",
+        MarketplaceVisitView.as_view(),
+        name="tenancy-marketplace-visit",
+    ),
     path("members/", MemberListView.as_view(), name="tenancy-members"),
     path("members/bulk/", ProvisionMembersView.as_view(), name="tenancy-members-bulk"),
     path(
