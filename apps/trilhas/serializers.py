@@ -34,12 +34,13 @@ class LearningTrailSerializer(serializers.ModelSerializer):
     headline = serializers.CharField(read_only=True)
     isSequential = serializers.BooleanField(source="is_sequential", read_only=True)
     isPublished = serializers.BooleanField(source="is_published", read_only=True)
+    archivedAt = serializers.DateTimeField(source="archived_at", read_only=True)
 
     class Meta:
         model = Trilha
         fields = (
             "id", "subject", "title", "headline", "year", "semester",
-            "nodes", "finalExam", "progress", "isSequential", "isPublished",
+            "nodes", "finalExam", "progress", "isSequential", "isPublished", "archivedAt",
         )
 
     def _computed(self, obj):

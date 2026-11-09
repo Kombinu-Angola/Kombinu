@@ -21,9 +21,14 @@ from .serializers import (
 
 
 def _visible_trilhas(view):
-    """Trilhas do workspace activo: publicadas, mais os rascunhos do criador."""
+    """
+    Trilhas do workspace activo: publicadas e não arquivadas, mais todas as do
+    criador (rascunhos e arquivadas incluídos).
+    """
     qs = view.scope(Trilha.objects.all())
-    return qs.filter(Q(is_published=True) | Q(creator=view.request.user))
+    return qs.filter(
+        Q(is_published=True, archived_at__isnull=True) | Q(creator=view.request.user)
+    )
 
 
 def _trilhas_for(view):
@@ -145,6 +150,20 @@ class TrilhaPublishView(_AuthoringMixin, APIView):
         except services.TrilhaError as exc:
             return _error(exc)
         return _trail_response(self, trilha.pk)
+
+
+class TrilhaArchiveView(_AuthoringMixin, APIView):
+    archive = True
+
+    @extend_schema(request=None, responses={200: LearningTrailSerializer})
+    def post(self, request, id):
+        trilha = self.get_own_trilha(id)
+        services.set_archived(trilha, self.archive)
+        return _trail_response(self, trilha.pk)
+
+
+class TrilhaUnarchiveView(TrilhaArchiveView):
+    archive = False
 
 
 class TrilhaItemCreateView(_AuthoringMixin, APIView):

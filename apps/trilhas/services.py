@@ -247,6 +247,18 @@ def delete_trilha(trilha):
         trilha.delete()
 
 
+def set_archived(trilha, archived):
+    """Arquivar e desarquivar são idempotentes; a data do 1.º arquivo mantém-se."""
+    with transaction.atomic():
+        trilha = _lock(trilha)
+        if archived and trilha.archived_at is None:
+            trilha.archived_at = timezone.now()
+        elif not archived:
+            trilha.archived_at = None
+        trilha.save(update_fields=["archived_at"])
+    return trilha
+
+
 def publish_trilha(trilha):
     with transaction.atomic():
         trilha = _lock(trilha)

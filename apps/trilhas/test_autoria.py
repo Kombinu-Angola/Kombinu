@@ -451,3 +451,59 @@ class TrilhaItemTests(AutoriaBase):
             **self.hdr,
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class TrilhaArchiveTests(AutoriaBase):
+    def archive(self, action="trilha-archive", user=None):
+        self.as_(user or self.teacher)
+        return self.client.post(reverse(action, args=[self.trilha.pk]), **self.hdr)
+
+    def test_archive_hides_from_students_keeps_progress(self):
+        TrilhaProgresso.objects.create(
+            user=self.student, item=self.i1, state="concluido"
+        )
+        r = self.archive()
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertIsNotNone(r.data["archivedAt"])
+        self.trilha.refresh_from_db()
+        self.assertIsNotNone(self.trilha.archived_at)
+        self.assertEqual(TrilhaProgresso.objects.count(), 1)
+
+        self.as_(self.student)
+        listed = self.client.get(reverse("trilha-list"), **self.hdr).data["results"]
+        self.assertNotIn(str(self.trilha.pk), [t["id"] for t in listed])
+        detail = reverse("trilha-detail", args=[self.trilha.pk])
+        self.assertEqual(self.client.get(detail, **self.hdr).status_code, 404)
+
+        self.as_(self.teacher)
+        self.assertEqual(self.client.get(detail, **self.hdr).status_code, 200)
+
+    def test_archive_is_idempotent_and_unarchive_restores(self):
+        self.archive()
+        self.trilha.refresh_from_db()
+        first = self.trilha.archived_at
+        self.archive()
+        self.trilha.refresh_from_db()
+        self.assertEqual(self.trilha.archived_at, first)
+
+        r = self.archive("trilha-unarchive")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIsNone(r.data["archivedAt"])
+        self.as_(self.student)
+        detail = reverse("trilha-detail", args=[self.trilha.pk])
+        self.assertEqual(self.client.get(detail, **self.hdr).status_code, 200)
+
+    def test_only_creator_archives(self):
+        for user in (self.other_teacher, self.student):
+            self.assertEqual(self.archive(user=user).status_code, 403)
+        self.trilha.refresh_from_db()
+        self.assertIsNone(self.trilha.archived_at)
+
+    def test_other_school_cannot_archive(self):
+        self.as_(self.foreign_teacher)
+        r = self.client.post(
+            reverse("trilha-archive", args=[self.trilha.pk]), **self.foreign_hdr
+        )
+        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
+        self.trilha.refresh_from_db()
+        self.assertIsNone(self.trilha.archived_at)
