@@ -56,6 +56,11 @@ class _BaseEnqueteSerializer(serializers.ModelSerializer):
     sampleTarget = serializers.IntegerField(source="sample_target", read_only=True)
     segmentSize = serializers.IntegerField(source="segment_size", read_only=True)
     options = OpcaoSerializer(many=True, read_only=True)
+    isOwner = serializers.SerializerMethodField()
+
+    def get_isOwner(self, obj) -> bool:
+        # Só lê a coluna `creator_id` da própria linha: sem consultas extra na lista.
+        return obj.creator_id == self.context["request"].user.pk
 
 
 class EnqueteVoterSerializer(_BaseEnqueteSerializer):
@@ -67,7 +72,7 @@ class EnqueteVoterSerializer(_BaseEnqueteSerializer):
         model = Enquete
         fields = (
             "id", "kind", "question", "faculty", "subject", "trigger",
-            "state", "options", "hasVoted",
+            "state", "options", "hasVoted", "isOwner",
         )
 
     def get_hasVoted(self, obj):
@@ -85,6 +90,7 @@ class EnqueteOwnerSerializer(_BaseEnqueteSerializer):
         fields = (
             "id", "decision", "kind", "question", "options", "faculty", "subject",
             "trigger", "sampleTarget", "segmentSize", "state", "closedAt",
+            "isOwner",
         )
 
 
