@@ -5,6 +5,14 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Enquetes: campo isOwner
+
+### Adicionado
+
+- **`isOwner`** (boolean, só de leitura) nas Enquetes, em `GET /api/enquetes/` e `GET /api/enquetes/{id}/`. Vale `true` quando o utilizador autenticado é o criador. Aparece tanto na vista do votante (`EnqueteVoterSerializer`) como na do criador (`EnqueteOwnerSerializer`, onde é sempre `true`), e as respostas das acções `publish/` e `close/` também o trazem. O frontend pode assim esconder "Ver resultados" e "Activar" a quem não é dono. O valor é calculado a partir de `creator_id`, sem consultas extra na lista. Nenhum outro campo muda e o isolamento entre workspaces continua igual.
+
+---
+
 ## [Não Lançado] - Limpeza: black nos testes e sem drf-yasg (B5)
 
 ### Removido
