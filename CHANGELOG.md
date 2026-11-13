@@ -22,7 +22,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ### Alterado
 
 - Ficheiros de teste formatados com o `black`. Só formatação, sem mudanças de comportamento.
-- **`drf-spectacular` fixado em `>=0.28,<0.29`** (antes `<1.0`), por decisão do CTO. Uma instalação nova trazia a 0.30, que muda os `operationId` (ex.: `api_auth_login_create` → `auth_login_create`) e as tags do Swagger. Assim, o release não traz mudanças no schema que não testámos.
+- **`drf-spectacular` fixado em `>=0.28,<0.29`** (antes `<1.0`), por decisão minha. Uma instalação nova trazia a 0.30, que muda os `operationId` (ex.: `api_auth_login_create` → `auth_login_create`) e as tags do Swagger. Assim, o release não traz mudanças no schema que não testámos.
 
 ---
 
@@ -240,7 +240,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Alterado
 
-- **Rotação do refresh token (D7):** `POST /api/auth/token/refresh/` passa de `{ "access" }` a `{ "access", "refresh" }` (`ROTATE_REFRESH_TOKENS = True`). **Breaking** para clientes que ignoravam a resposta; o frontend já guarda o refresh novo (contrato aprovado pelo CTO).
+- **Rotação do refresh token (D7):** `POST /api/auth/token/refresh/` passa de `{ "access" }` a `{ "access", "refresh" }` (`ROTATE_REFRESH_TOKENS = True`). **Breaking** para clientes que ignoravam a resposta; o frontend já guarda o refresh novo (contrato que aprovei).
 - Sem blacklist: o refresh anterior continua válido até expirar (1 dia), salvo se a password for trocada depois de ele ser emitido (`password_changed_at`). A blacklist acrescentaria uma app e tabelas, e fica para quando for precisa a revogação remota.
 
 ### Testes
