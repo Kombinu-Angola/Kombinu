@@ -13,7 +13,7 @@ from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.contents.models import Content
 from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
 from apps.rankings.models import XPEvent
-from apps.rankings.services import record_xp
+from apps.rankings.services import quiz_submission_xp, record_xp
 from apps.tenancy.scoping import WorkspaceScopedMixin, can_create_in
 from apps.trilhas.services import on_quiz_submitted
 
@@ -222,7 +222,7 @@ class QuizSubmissionView(WorkspaceScopedMixin, APIView):
                 # Score guardado em XP (respostas correctas × 10) para suportar
                 # o sistema de níveis — level = (total_xp // 100) + 1.
                 # D12: XP só na primeira tentativa.
-                xp_earned = correct_count * 10 if attempt == 1 else 0
+                xp_earned = quiz_submission_xp(correct_count, attempt)
                 submission.correct_count = correct_count
                 submission.xp_awarded = xp_earned
                 submission.score = xp_earned
