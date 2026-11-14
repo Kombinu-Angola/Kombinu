@@ -8,37 +8,43 @@ organizações com slug `demo-*`. É idempotente (correr de novo não duplica) e
 demonstração (ex.: um utilizador real respondeu a um quiz demo), o `--limpar`
 recusa e não apaga nada.
 
-As submissões de quizzes passam pela própria `QuizSubmissionView`, e as
-enquetes e trilhas pelos serviços normais, para o ledger de XP, o progresso
-nas trilhas e as notificações ficarem consistentes com a API.
+Pensado para correr contra uma base remota (cada consulta pode custar 100 a
+300 ms): lê tudo em poucas consultas, calcula em memória e escreve em lote. As
+submissões, os votos e o progresso seguem as mesmas regras da API e usam as
+mesmas funções (`quiz_submission_xp`, `record_xp_many`, `stars_for`,
+`ENQUETE_VOTE_XP`); a criação e a publicação de enquetes e a publicação de
+trilhas passam pelos serviços normais, que validam e notificam.
 """
 
 import getpass
 import os
 import random
+import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Q
-from django.urls import reverse
 from django.utils import timezone
-from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.accounts.institutional import generate_temporary_password
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
 from apps.enquetes import services as enquete_services
-from apps.enquetes.models import Enquete, EnqueteVoto
+from apps.enquetes.models import Enquete, EnqueteExibicao, EnqueteVoto
+from apps.enquetes.services import ENQUETE_VOTE_XP
 from apps.notificacoes.models import Notificacao
 from apps.notificacoes.services import notify_members
-from apps.quizzes.models import Option, Question, Quiz, QuizSubmission
-from apps.quizzes.views import QuizSubmissionView
+from apps.quizzes.models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.rankings.models import XPEvent
-from apps.tenancy import services as tenancy_services
+from apps.rankings.services import quiz_submission_xp, record_xp_many
+from apps.tenancy.codes import normalize_student_code
 from apps.tenancy.models import (
     AuditoriaMembro,
     ConversaoMarketplace,
@@ -57,6 +63,9 @@ MIN_PASSWORD_LENGTH = 12
 PROMPT = object()
 DEMO_SLUGS = [o["slug"] for o in dados.ORGANIZACOES.values()]
 STUDENT_KEYS = list(dados.APTIDAO)
+# Submissões por lote: dá progresso visível sem multiplicar as consultas.
+SUBMISSION_BATCH = 60
+TARGET_FIELD = {"conteudo": "content", "quiz": "quiz", "enquete": "enquete"}
 
 
 def demo_email(key):
@@ -195,8 +204,38 @@ class Command(BaseCommand):
             )
 
     # -------------------------------------------------------------------- seed
+    @contextmanager
+    def _fase(self, label):
+        """Uma linha por fase, para haver progresso visível contra uma base remota."""
+        self.stdout.write(f"{label}…", ending=" ")
+        self.stdout.flush()
+        start = time.monotonic()
+        yield
+        self.stdout.write(f"ok ({time.monotonic() - start:.1f} s)")
+
     def seed(self, fixed_password, reset_passwords):
-        now = timezone.now()
+        self.now = timezone.now()
+        with self._fase("Escolas e contas"):
+            credenciais = self._seed_accounts(fixed_password, reset_passwords)
+        with self._fase("Conteúdos e quizzes"):
+            self._seed_contents()
+        with self._fase("Enquetes"):
+            self._seed_enquetes()
+        with self._fase("Trilhas"):
+            self._seed_trilhas()
+        self._seed_submissions()
+        with self._fase("Progresso nos conteúdos"):
+            self._seed_content_progress()
+        with self._fase("Votos"):
+            self._seed_votes()
+        with self._fase("Visitas ao marketplace"):
+            self._seed_marketplace_visits()
+        return credenciais
+
+    def _org(self, key):
+        return self.orgs[key] if key else None
+
+    def _seed_accounts(self, fixed_password, reset_passwords):
         self.orgs = {}
         for key, data in dados.ORGANIZACOES.items():
             org, _ = Organizacao.objects.get_or_create(
@@ -209,33 +248,34 @@ class Command(BaseCommand):
         for user_key, org_key, role, *_ in dados.MEMBROS:
             roles.setdefault(user_key, set()).add(f"{role}@{org_key}")
 
-        credenciais = []
+        existing = {u.email.lower(): u for u in demo_users()}
+        credenciais, new_users, reset_users, to_hash = [], [], [], []
         self.users = {}
         for key, first, last, user_type in dados.UTILIZADORES:
             email = demo_email(key)
-            user = CustomUser.objects.filter(email__iexact=email).first()
+            user = existing.get(email)
             password = None
             if user is None:
+                password = fixed_password or generate_temporary_password()
                 user = CustomUser(
                     username=email,
                     email=email,
                     first_name=first,
                     last_name=last,
                     user_type=user_type,
+                    password_changed_at=self.now,
                     must_change_password=False,
                 )
-                password = fixed_password or generate_temporary_password()
-                user.set_password(password)
-                user.password_changed_at = now
-                user.save()
+                new_users.append(user)
+                to_hash.append((user, password))
             elif reset_passwords:
                 password = fixed_password or generate_temporary_password()
-                user.set_password(password)
-                # Explícito: invalida os tokens emitidos antes desta reposição.
-                user.password_changed_at = now
+                to_hash.append((user, password))
+                # Invalida os tokens emitidos antes desta reposição.
+                user.password_changed_at = self.now
                 user.must_change_password = False
                 user.temp_password_expires_at = None
-                user.save()
+                reset_users.append(user)
             self.users[key] = user
             papel = ", ".join(sorted(roles.get(key, set()))) or (
                 "criador marketplace"
@@ -244,18 +284,51 @@ class Command(BaseCommand):
             )
             credenciais.append((email, papel, password))
 
-        for user_key, org_key, role, year, faculty, course, code in dados.MEMBROS:
-            Membership.objects.get_or_create(
-                user=self.users[user_key],
-                organizacao=self.orgs[org_key],
-                defaults={
-                    "role": role,
-                    "academic_year": year,
-                    "faculty": faculty,
-                    "course": course,
-                    "student_code": code,
-                },
+        self._hash_passwords(to_hash, fixed_password)
+        if new_users:
+            CustomUser.objects.bulk_create(new_users)
+            if any(u.pk is None for u in new_users):
+                # Bases sem RETURNING no bulk_create: recarregar os ids.
+                ids = dict(
+                    CustomUser.objects.filter(
+                        email__in=[u.email for u in new_users]
+                    ).values_list("email", "pk")
+                )
+                for u in new_users:
+                    u.pk = u.id = ids[u.email]
+        if reset_users:
+            CustomUser.objects.bulk_update(
+                reset_users,
+                [
+                    "password",
+                    "password_changed_at",
+                    "must_change_password",
+                    "temp_password_expires_at",
+                ],
             )
+
+        existing_members = set(
+            Membership.objects.filter(organizacao__in=self.orgs.values()).values_list(
+                "user_id", "organizacao_id"
+            )
+        )
+        Membership.objects.bulk_create(
+            [
+                Membership(
+                    user=self.users[user_key],
+                    organizacao=self.orgs[org_key],
+                    role=role,
+                    academic_year=year,
+                    faculty=faculty,
+                    course=course,
+                    # O bulk_create não chama Membership.save(): normalizar aqui.
+                    student_code=normalize_student_code(code) or None,
+                )
+                for user_key, org_key, role, year, faculty, course, code in dados.MEMBROS
+                if (self.users[user_key].pk, self.orgs[org_key].pk)
+                not in existing_members
+            ]
+        )
 
         for org in self.orgs.values():
             notify_members(
@@ -266,66 +339,106 @@ class Command(BaseCommand):
                 title="Bem-vindo ao Kombinu",
                 body=f"Explora os conteúdos, as trilhas e as enquetes de {org.name}.",
             )
-
-        self._seed_contents()
-        self._seed_enquetes()
-        self._seed_trilhas()
-        self._seed_submissions()
-        self._seed_content_progress()
-        self._seed_votes()
-        self._seed_marketplace_visits()
         return credenciais
 
-    def _org(self, key):
-        return self.orgs[key] if key else None
+    def _hash_passwords(self, to_hash, fixed_password):
+        """
+        O PBKDF2 é propositadamente lento (cerca de 0,5 a 3 s por hash). Uma
+        password escolhida é igual em todas as contas: basta um hash. As
+        geradas têm um hash cada, calculados em paralelo (o `pbkdf2_hmac`
+        liberta o GIL).
+        """
+        if not to_hash:
+            return
+        if fixed_password:
+            hashed = make_password(fixed_password)
+            hashes = [hashed] * len(to_hash)
+        else:
+            workers = max(1, min(8, os.cpu_count() or 1))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                hashes = list(pool.map(make_password, [p for _, p in to_hash]))
+        for (user, _), hashed in zip(to_hash, hashes):
+            user.password = hashed
 
     def _seed_contents(self):
-        self.contents = {}
+        users = list(self.users.values())
+        existing = {
+            (c.title, c.creator_id, c.organizacao_id): c
+            for c in Content.objects.filter(creator__in=users)
+        }
+        self.contents, new_contents = {}, []
         for key, d in dados.CONTEUDOS.items():
-            content, _ = Content.objects.get_or_create(
-                title=d["title"],
-                creator=self.users[d["creator"]],
-                organizacao=self._org(d["org"]),
-                defaults={
-                    "description": d["description"],
-                    "category": d["category"],
-                    "level": d["level"],
-                    "duration": d["duration"],
-                    "tags": d["tags"],
-                    "text_content": "\n\n".join(d["paragraphs"]),
-                    "type": "text",
-                },
-            )
-            self.contents[key] = content
-            if d["questions"] and not Quiz.objects.filter(content=content).exists():
-                quiz = Quiz.objects.create(
-                    title=f"Quiz: {content.title}",
-                    content=content,
-                    organizacao=content.organizacao,
+            creator, org = self.users[d["creator"]], self._org(d["org"])
+            content = existing.get((d["title"], creator.pk, org.pk if org else None))
+            if content is None:
+                content = Content(
+                    title=d["title"],
+                    creator=creator,
+                    organizacao=org,
+                    description=d["description"],
+                    category=d["category"],
+                    level=d["level"],
+                    duration=d["duration"],
+                    tags=d["tags"],
+                    text_content="\n\n".join(d["paragraphs"]),
+                    type="text",
                 )
-                for q in d["questions"]:
-                    question = Question.objects.create(
-                        quiz=quiz, question_text=q["question"]
-                    )
-                    for index, text in enumerate(q["options"]):
-                        Option.objects.create(
-                            question=question,
-                            text=text,
-                            is_correct=index == q["correct"],
-                        )
+                new_contents.append(content)
+            self.contents[key] = content
+        Content.objects.bulk_create(new_contents)
 
-    def _quiz_for(self, content_key):
-        return Quiz.objects.get(content=self.contents[content_key])
+        with_quiz = {
+            q.content_id
+            for q in Quiz.objects.filter(content__in=self.contents.values()).only(
+                "content_id"
+            )
+        }
+        quizzes, questions, options = [], [], []
+        for key, d in dados.CONTEUDOS.items():
+            content = self.contents[key]
+            if not d["questions"] or content.pk in with_quiz:
+                continue
+            quiz = Quiz(
+                title=f"Quiz: {content.title}",
+                content=content,
+                organizacao=content.organizacao,
+            )
+            quizzes.append(quiz)
+            for q in d["questions"]:
+                question = Question(quiz=quiz, question_text=q["question"])
+                questions.append(question)
+                options.extend(
+                    Option(question=question, text=text, is_correct=i == q["correct"])
+                    for i, text in enumerate(q["options"])
+                )
+        Quiz.objects.bulk_create(quizzes)
+        Question.objects.bulk_create(questions)
+        Option.objects.bulk_create(options)
+
+        by_content = {
+            quiz.content_id: quiz
+            for quiz in Quiz.objects.filter(
+                content__in=self.contents.values()
+            ).prefetch_related("questions__options")
+        }
+        self.quizzes = {
+            key: by_content[content.pk]
+            for key, content in self.contents.items()
+            if content.pk in by_content
+        }
 
     def _seed_enquetes(self):
+        users = list(self.users.values())
+        existing = {
+            (e.question, e.creator_id, e.organizacao_id): e
+            for e in Enquete.objects.filter(creator__in=users)
+        }
         self.enquetes = {}
         for d in dados.ENQUETES:
-            creator = self.users[d["creator"]]
-            org = self._org(d["org"])
-            enquete = Enquete.objects.filter(
-                question=d["question"], creator=creator, organizacao=org
-            ).first()
+            creator, org = self.users[d["creator"]], self._org(d["org"])
+            enquete = existing.get((d["question"], creator.pk, org.pk if org else None))
             if enquete is None:
+                # Poucas enquetes: o serviço normal valida e notifica a escola.
                 enquete = enquete_services.create_enquete(
                     creator=creator,
                     organizacao=org,
@@ -344,36 +457,61 @@ class Command(BaseCommand):
                 enquete = enquete_services.publish(enquete)
             self.enquetes[d["key"]] = enquete
 
+    def _target(self, kind, key):
+        if kind == "conteudo":
+            return self.contents[key]
+        if kind == "quiz":
+            return self.quizzes[key]
+        return self.enquetes[key]
+
     def _seed_trilhas(self):
-        self.trilhas = []
+        users = list(self.users.values())
+        existing = {
+            (t.title, t.creator_id, t.organizacao_id): t
+            for t in Trilha.objects.filter(creator__in=users)
+        }
+        new_trilhas, new_items, self.trilhas = [], [], []
         for d in dados.TRILHAS:
-            creator = self.users[d["creator"]]
-            org = self._org(d["org"])
-            trilha, created = Trilha.objects.get_or_create(
-                title=d["title"],
-                creator=creator,
-                organizacao=org,
-                defaults={
-                    "headline": d["headline"],
-                    "subject": d["subject"],
-                    "year": d["year"],
-                    "semester": d["semester"],
-                    "is_sequential": d["is_sequential"],
-                },
-            )
-            if created:
-                for kind, key in d["items"]:
-                    if kind == "conteudo":
-                        target = self.contents[key]
-                    elif kind == "quiz":
-                        target = self._quiz_for(key)
-                    else:
-                        target = self.enquetes[key]
-                    trilha_services.add_item(
-                        trilha, creator, {"kind": kind, "target_id": target.pk}
+            creator, org = self.users[d["creator"]], self._org(d["org"])
+            trilha = existing.get((d["title"], creator.pk, org.pk if org else None))
+            if trilha is None:
+                trilha = Trilha(
+                    title=d["title"],
+                    creator=creator,
+                    organizacao=org,
+                    headline=d["headline"],
+                    subject=d["subject"],
+                    year=d["year"],
+                    semester=d["semester"],
+                    is_sequential=d["is_sequential"],
+                )
+                new_trilhas.append(trilha)
+                for order, (kind, key) in enumerate(d["items"], start=1):
+                    target = self._target(kind, key)
+                    # Mesma regra do `resolve_target`: o alvo é do contexto da trilha.
+                    if target.organizacao_id != trilha.organizacao_id:
+                        raise CommandError(f"Passo fora do contexto em {d['title']}.")
+                    new_items.append(
+                        TrilhaItem(
+                            trilha=trilha,
+                            order=order,
+                            kind=kind,
+                            **{TARGET_FIELD[kind]: target},
+                        )
                     )
-                trilha = trilha_services.publish_trilha(trilha)
             self.trilhas.append((d, trilha))
+        Trilha.objects.bulk_create(new_trilhas)
+        TrilhaItem.objects.bulk_create(new_items)
+        for trilha in new_trilhas:
+            # Publicação pelo serviço: valida os passos e notifica os alunos.
+            trilha_services.publish_trilha(trilha)
+
+        items = TrilhaItem.objects.filter(
+            trilha__in=[t for _, t in self.trilhas]
+        ).order_by("order")
+        self.items_by_trilha = {}
+        for item in items:
+            self.items_by_trilha.setdefault(item.trilha_id, []).append(item)
 
     def _members_of(self, org_key):
         return [
@@ -387,92 +525,281 @@ class Command(BaseCommand):
             return [self.users[k] for k in STUDENT_KEYS]
         return self._members_of(org_key)
 
+    def _progress_rows(self, items_by_ctx, key, user, submission=None, stars=None):
+        """TrilhaProgresso concluído para os itens (publicados, mesmo contexto)."""
+        return [
+            TrilhaProgresso(
+                user=user,
+                item_id=item_id,
+                state="concluido",
+                completed_at=self.now,
+                submission=submission,
+                stars=stars,
+            )
+            for item_id in items_by_ctx.get(key, ())
+        ]
+
+    def _published_items(self, kind, field, targets):
+        """
+        Itens `kind` de trilhas publicadas que apontam para `targets`, por
+        (alvo, contexto), como em `on_quiz_submitted`/`on_enquete_voted`.
+        """
+        index = {}
+        rows = TrilhaItem.objects.filter(
+            kind=kind,
+            trilha__is_published=True,
+            **{f"{field}__in": targets},
+        ).values_list("pk", f"{field}_id", "trilha__organizacao_id")
+        for item_id, target_id, org_id in rows:
+            index.setdefault((target_id, org_id), []).append(item_id)
+        return index
+
     def _seed_submissions(self):
-        factory = APIRequestFactory()
-        view = QuizSubmissionView.as_view()
+        """
+        Mesmas regras da `QuizSubmissionView`, em lote: XP pela
+        `quiz_submission_xp` e pelo ledger (`record_xp_many`), workspace = o
+        contexto do quiz, e o progresso de `on_quiz_submitted` (estrelas por
+        `stars_for`). Uma submissão por (aluno, quiz), por isso é a 1.ª tentativa.
+        """
         student_keys = {self.users[k].pk: k for k in STUDENT_KEYS}
+        done = set(
+            QuizSubmission.objects.filter(
+                quiz__in=self.quizzes.values(), user__in=self.users.values()
+            ).values_list("user_id", "quiz_id")
+        )
+        quiz_items = self._published_items("quiz", "quiz", list(self.quizzes.values()))
+
+        planned = []
         for content_key, d in dados.CONTEUDOS.items():
-            if not d["questions"]:
+            quiz = self.quizzes.get(content_key)
+            if quiz is None:
                 continue
-            quiz = self._quiz_for(content_key)
-            org = self._org(d["org"])
-            questions = list(quiz.questions.prefetch_related("options"))
+            questions = list(quiz.questions.all())
             for user in self._eligible_students(d["org"]):
                 key = student_keys[user.pk]
                 rng = random.Random(f"{key}:{content_key}")
-                if rng.random() > 0.75:
+                if rng.random() > 0.75 or (user.pk, quiz.pk) in done:
                     continue
-                if QuizSubmission.objects.filter(user=user, quiz=quiz).exists():
-                    continue
-                answers = []
+                picks = []
                 for question in questions:
                     options = list(question.options.all())
                     correct = [o for o in options if o.is_correct]
                     wrong = [o for o in options if not o.is_correct]
-                    pick = (
+                    picks.append(
                         correct[0]
                         if rng.random() < dados.APTIDAO[key] or not wrong
                         else rng.choice(wrong)
                     )
-                    answers.append(
-                        {
-                            "question_id": str(question.pk),
-                            "selected_option_id": str(pick.pk),
-                        }
+                planned.append((user, quiz, questions, picks))
+
+        total = len(planned)
+        self.stdout.write(f"Submissões 0/{total}…")
+        for start in range(0, total, SUBMISSION_BATCH):
+            batch = planned[start : start + SUBMISSION_BATCH]
+            submissions = []
+            for user, quiz, questions, picks in batch:
+                correct_count = sum(1 for o in picks if o.is_correct)
+                xp = quiz_submission_xp(correct_count, attempt=1)
+                submissions.append(
+                    QuizSubmission(
+                        user=user,
+                        quiz=quiz,
+                        attempt=1,
+                        score=xp,
+                        xp_awarded=xp,
+                        correct_count=correct_count,
+                        total_questions=len(questions),
+                        organizacao_id=quiz.organizacao_id,
                     )
-                extra = {"HTTP_X_WORKSPACE": str(org.pk)} if org else {}
-                request = factory.post(
-                    reverse("quiz-submit", args=[quiz.pk]),
-                    {"answers": answers},
-                    format="json",
-                    **extra,
                 )
-                force_authenticate(request, user=user)
-                response = view(request, quiz_id=quiz.pk)
-                if response.status_code not in (200, 201):
-                    raise CommandError(
-                        f"Submissão demo falhou ({response.status_code}) em {quiz.title}."
+            QuizSubmission.objects.bulk_create(submissions)
+            if any(s.pk is None for s in submissions):
+                ids = {
+                    (u, q): pk
+                    for u, q, pk in QuizSubmission.objects.filter(
+                        quiz__in={s.quiz_id for s in submissions},
+                        user__in={s.user_id for s in submissions},
+                        attempt=1,
+                    ).values_list("user_id", "quiz_id", "pk")
+                }
+                for s in submissions:
+                    s.pk = s.id = ids[(s.user_id, s.quiz_id)]
+
+            answers, grants, progress = [], [], []
+            for submission, (user, quiz, questions, picks) in zip(submissions, batch):
+                answers.extend(
+                    QuizAnswer(submission=submission, question=q, selected_option=o)
+                    for q, o in zip(questions, picks)
+                )
+                grants.append(
+                    {
+                        "user": user,
+                        "amount": submission.xp_awarded,
+                        "source_type": XPEvent.SOURCE_QUIZ_SUBMISSION,
+                        "source_id": submission.pk,
+                        "organizacao": quiz.organizacao,
+                    }
+                )
+                progress.extend(
+                    self._progress_rows(
+                        quiz_items,
+                        (quiz.pk, quiz.organizacao_id),
+                        user,
+                        submission=submission,
+                        stars=trilha_services.stars_for(
+                            submission.correct_count, submission.total_questions
+                        ),
                     )
+                )
+            QuizAnswer.objects.bulk_create(answers)
+            record_xp_many(grants)
+            TrilhaProgresso.objects.bulk_create(progress, ignore_conflicts=True)
+            self.stdout.write(f"Submissões {start + len(batch)}/{total}…")
+        self.stdout.write("Submissões… ok")
 
     def _seed_content_progress(self):
+        content_items = {
+            item.pk
+            for _, trilha in self.trilhas
+            for item in self.items_by_trilha.get(trilha.pk, [])
+            if item.kind == "conteudo"
+        }
+        existing = {
+            (p.user_id, p.item_id): p
+            for p in TrilhaProgresso.objects.filter(item_id__in=content_items)
+        }
+        new, to_complete = [], []
         for d, trilha in self.trilhas:
             for user in self._eligible_students(d["org"]):
                 rng = random.Random(f"{user.email}:{d['key']}")
-                for item in trilha.items.filter(kind="conteudo"):
-                    if rng.random() < 0.6:
-                        trilha_services.complete_content_item(user, item)
+                for item in self.items_by_trilha.get(trilha.pk, []):
+                    if item.kind != "conteudo" or rng.random() >= 0.6:
+                        continue
+                    progress = existing.get((user.pk, item.pk))
+                    if progress is None:
+                        new.append(
+                            TrilhaProgresso(
+                                user=user,
+                                item=item,
+                                state="concluido",
+                                completed_at=self.now,
+                            )
+                        )
+                    elif progress.state != "concluido":
+                        progress.state = "concluido"
+                        progress.completed_at = progress.completed_at or self.now
+                        to_complete.append(progress)
+        TrilhaProgresso.objects.bulk_create(new, ignore_conflicts=True)
+        TrilhaProgresso.objects.bulk_update(to_complete, ["state", "completed_at"])
 
     def _seed_votes(self):
+        """
+        Mesmas regras de `cast_vote`, em lote: um voto por pessoa, exibição
+        `respondida`, XP (`ENQUETE_VOTE_XP`) no ledger, progresso dos passos
+        `enquete` e fecho ao atingir `sample_target`.
+        """
+        enquetes = {
+            e.pk: e
+            for e in Enquete.objects.filter(
+                pk__in=[e.pk for e in self.enquetes.values()]
+            ).prefetch_related("options")
+        }
+        voted = set(
+            EnqueteVoto.objects.filter(enquete__in=enquetes.values()).values_list(
+                "enquete_id", "user_id"
+            )
+        )
+        vote_counts = {}
+        for enquete_id, _ in voted:
+            vote_counts[enquete_id] = vote_counts.get(enquete_id, 0) + 1
+        years = {
+            (self.users[u].pk, self.orgs[o].pk): year
+            for u, o, _, year, *_ in dados.MEMBROS
+        }
+        enquete_items = self._published_items("enquete", "enquete", list(enquetes))
+
+        votes, grants, progress, to_close = [], [], [], []
         for d in dados.ENQUETES:
-            enquete = Enquete.objects.get(pk=self.enquetes[d["key"]].pk)
+            enquete = enquetes[self.enquetes[d["key"]].pk]
             options = list(enquete.options.all())
+            count = vote_counts.get(enquete.pk, 0)
             for user in self._members_of(d["org"]):
                 if enquete.state != Enquete.STATE_PUBLISHED:
                     break
                 rng = random.Random(f"{user.email}:{d['key']}")
-                if rng.random() > 0.85:
-                    continue
-                if EnqueteVoto.objects.filter(enquete=enquete, user=user).exists():
+                if rng.random() > 0.85 or (enquete.pk, user.pk) in voted:
                     continue
                 # Preferência ligeira pelas primeiras opções, para os
                 # resultados não ficarem uniformes.
                 weights = [len(options) - i for i in range(len(options))]
-                opcao = rng.choices(options, weights=weights)[0]
-                enquete_services.cast_vote(
-                    user=user,
+                voto = EnqueteVoto(
                     enquete=enquete,
-                    opcao_id=opcao.pk,
-                    organizacao=enquete.organizacao,
+                    opcao=rng.choices(options, weights=weights)[0],
+                    user=user,
+                    year_snapshot=years.get((user.pk, enquete.organizacao_id), ""),
                 )
-                enquete.refresh_from_db()
+                votes.append(voto)
+                grants.append(
+                    {
+                        "user": user,
+                        "amount": ENQUETE_VOTE_XP,
+                        "source_type": XPEvent.SOURCE_ENQUETE_VOTO,
+                        "source_id": voto.pk,
+                        "organizacao": enquete.organizacao,
+                    }
+                )
+                progress.extend(
+                    self._progress_rows(
+                        enquete_items, (enquete.pk, enquete.organizacao_id), user
+                    )
+                )
+                count += 1
+                if count >= enquete.sample_target:
+                    enquete.state = Enquete.STATE_CLOSED
+                    enquete.closed_at = self.now
+                    to_close.append(enquete)
+
+        EnqueteVoto.objects.bulk_create(votes)
+        voters = {(v.enquete_id, v.user_id) for v in votes}
+        shown = {
+            (x.enquete_id, x.user_id): x
+            for x in EnqueteExibicao.objects.filter(
+                enquete__in=enquetes.values(), user__in=self.users.values()
+            )
+        }
+        to_answer = []
+        for pair in voters & set(shown):
+            shown[pair].outcome = "respondida"
+            to_answer.append(shown[pair])
+        EnqueteExibicao.objects.bulk_update(to_answer, ["outcome"])
+        EnqueteExibicao.objects.bulk_create(
+            [
+                EnqueteExibicao(enquete_id=e, user_id=u, outcome="respondida")
+                for e, u in voters - set(shown)
+            ]
+        )
+        record_xp_many(grants)
+        TrilhaProgresso.objects.bulk_create(progress, ignore_conflicts=True)
+        Enquete.objects.bulk_update(to_close, ["state", "closed_at"])
+
+        for d in dados.ENQUETES:
+            enquete = enquetes[self.enquetes[d["key"]].pk]
             if d["close"] and enquete.state == Enquete.STATE_PUBLISHED:
                 enquete_services.close(enquete)
 
     def _seed_marketplace_visits(self):
-        for user_key in {m[0] for m in dados.MEMBROS if m[2] == "student"}:
+        """Como `record_marketplace_visit`: uma linha por escola de origem."""
+        rows = []
+        for user_key in sorted({m[0] for m in dados.MEMBROS if m[2] == "student"}):
             user = self.users[user_key]
-            if random.Random(f"{user.email}:visita").random() < 0.6:
-                tenancy_services.record_marketplace_visit(user)
+            if random.Random(f"{user.email}:visita").random() >= 0.6:
+                continue
+            rows.extend(
+                ConversaoMarketplace(user=user, organizacao=self.orgs[org_key])
+                for u, org_key, *_ in dados.MEMBROS
+                if u == user_key
+            )
+        ConversaoMarketplace.objects.bulk_create(rows, ignore_conflicts=True)
 
     def _print_summary(self, credenciais, source):
         out = self.stdout
