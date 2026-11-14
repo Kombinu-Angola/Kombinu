@@ -134,6 +134,8 @@ Antes de iniciar, certifique-se de ter instalado:
 
 O comando enche a plataforma com dados fictícios para demonstrações. Cria duas escolas (`demo-uan` e `demo-colegio-kiala`), 24 contas em `@demo.kombinu.com` e 28 conteúdos (15 no marketplace). Cria também quizzes com submissões, trilhas publicadas com progresso, enquetes com votos e notificações.
 
+Foi pensado para correr também contra uma base remota. Faz cerca de 180 consultas na 1.ª execução e cerca de 35 numa repetição, e mostra uma linha de progresso por fase. Com 200 ms por consulta, a 1.ª execução com `--set-password` demora cerca de 40 s. Com passwords geradas, junta-se o tempo dos hashes (um por conta, em paralelo).
+
 ```bash
 python manage.py seed_demo                          # cria (ou completa) os dados demo
 python manage.py seed_demo --redefinir-passwords    # gera passwords novas para as contas demo
