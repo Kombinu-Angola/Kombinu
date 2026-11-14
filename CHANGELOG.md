@@ -5,6 +5,14 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - CORS: header `X-Workspace`
+
+### Corrigido
+
+- **CORS passa a aceitar o header `X-Workspace`.** Em produção, o preflight devolvia a lista por omissão do `django-cors-headers`, sem `x-workspace`, por isso o browser bloqueava qualquer pedido feito dentro de uma escola. Localmente não se via, porque o proxy do Vite serve a API na mesma origem. `CORS_ALLOW_HEADERS` passa a ser `(*default_headers, "x-workspace")`. As origens, os métodos e as credenciais não mudam: uma origem fora de `CORS_ALLOWED_ORIGINS` continua sem `Access-Control-Allow-Origin`.
+
+---
+
 ## [Não Lançado] - `seed_demo` rápido contra bases remotas
 
 ### Alterado

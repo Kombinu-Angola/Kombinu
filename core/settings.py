@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
+from corsheaders.defaults import default_headers
 
 load_dotenv()
 
@@ -160,6 +161,10 @@ CORS_ALLOWED_ORIGINS = (
     if os.getenv("CORS_ALLOWED_ORIGINS")
     else []
 )
+
+# O frontend envia `X-Workspace` (contexto activo, ver tenancy/scoping.py). Sem
+# ele na lista, o browser bloqueia o preflight de qualquer pedido numa escola.
+CORS_ALLOW_HEADERS = (*default_headers, "x-workspace")
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
