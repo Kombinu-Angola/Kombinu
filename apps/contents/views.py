@@ -11,7 +11,11 @@ from .permissions import IsCreator, IsContentOwner
 
 
 class ContentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
-    queryset = Content.objects.all().order_by('-created_at')
+    # `creator` e a relação inversa `quiz` (usada por `has_quiz`/`quiz_id`) vêm
+    # no mesmo JOIN: sem isto eram 2 a 3 consultas por conteúdo (N+1).
+    queryset = (
+        Content.objects.select_related("creator", "quiz").all().order_by('-created_at')
+    )
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["category", "creator"]
