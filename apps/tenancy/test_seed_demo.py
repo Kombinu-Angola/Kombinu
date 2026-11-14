@@ -7,7 +7,10 @@ from unittest import mock
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
+from django.db.models import Sum
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -15,7 +18,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
-from apps.enquetes.models import Enquete, EnqueteVoto
+from apps.enquetes.models import Enquete, EnqueteExibicao, EnqueteVoto
 from apps.notificacoes.models import Notificacao
 from apps.quizzes.models import Question, Quiz, QuizSubmission
 from apps.rankings.models import XPEvent
@@ -347,6 +350,153 @@ class SeededTests(TestCase):
                 source_type="quiz_submission", source_id=str(sub.pk)
             )
             self.assertEqual(event.organizacao_id, self.uan.pk)
+
+    # ------------------------------------------- equivalência com o caminho da API
+    def xp_by_workspace(self, user):
+        return dict(
+            XPEvent.objects.filter(user=user)
+            .values("organizacao_id")
+            .annotate(total=Sum("amount"))
+            .values_list("organizacao_id", "total")
+        )
+
+    def snapshot_progress(self, user, **item_filter):
+        return sorted(
+            TrilhaProgresso.objects.filter(user=user, **item_filter).values_list(
+                "item_id", "state", "stars"
+            )
+        )
+
+    def test_submissions_match_api(self):
+        """
+        Para uma submissão de cada contexto, apaga o que o seed criou e refaz
+        a mesma submissão pela `QuizSubmissionView`. O XP por utilizador e
+        workspace, os campos da submissão e o progresso têm de ficar iguais.
+        """
+        samples = [
+            QuizSubmission.objects.filter(organizacao=org, xp_awarded__gt=0)
+            .exclude(quiz__trilha_items=None)
+            .order_by("pk")
+            .first()
+            for org in (None, self.uan, self.kiala)
+        ]
+        for seeded in samples:
+            self.assertIsNotNone(seeded)
+            user, quiz = seeded.user, seeded.quiz
+            answers = [
+                {
+                    "question_id": str(a.question_id),
+                    "selected_option_id": str(a.selected_option_id),
+                }
+                for a in seeded.answers.all()
+            ]
+            fields = (
+                seeded.xp_awarded,
+                seeded.correct_count,
+                seeded.total_questions,
+                seeded.organizacao_id,
+                seeded.attempt,
+            )
+            xp_before = self.xp_by_workspace(user)
+            progress_before = self.snapshot_progress(user, item__quiz=quiz)
+            self.assertTrue(progress_before)
+
+            TrilhaProgresso.objects.filter(user=user, item__quiz=quiz).delete()
+            XPEvent.objects.filter(
+                source_type="quiz_submission", source_id=str(seeded.pk)
+            ).delete()
+            seeded.delete()
+
+            client = APIClient()
+            client.force_authenticate(user)
+            extra = (
+                {"HTTP_X_WORKSPACE": str(seeded.organizacao_id)}
+                if seeded.organizacao_id
+                else {}
+            )
+            r = client.post(
+                reverse("quiz-submit", args=[quiz.pk]),
+                {"answers": answers},
+                format="json",
+                **extra,
+            )
+            self.assertEqual(r.status_code, 200, r.data)
+            api = QuizSubmission.objects.get(user=user, quiz=quiz)
+            self.assertEqual(
+                (
+                    api.xp_awarded,
+                    api.correct_count,
+                    api.total_questions,
+                    api.organizacao_id,
+                    api.attempt,
+                ),
+                fields,
+            )
+            self.assertEqual(self.xp_by_workspace(user), xp_before)
+            self.assertEqual(
+                self.snapshot_progress(user, item__quiz=quiz), progress_before
+            )
+
+    def test_votes_match_api(self):
+        enquete = Enquete.objects.get(
+            question=dados.ENQUETES[0]["question"], state="activa"
+        )
+        seeded = EnqueteVoto.objects.filter(enquete=enquete).order_by("pk").first()
+        user, opcao = seeded.user, seeded.opcao
+        xp_before = self.xp_by_workspace(user)
+        progress_before = self.snapshot_progress(user, item__enquete=enquete)
+        self.assertTrue(progress_before)
+        year = seeded.year_snapshot
+
+        TrilhaProgresso.objects.filter(user=user, item__enquete=enquete).delete()
+        XPEvent.objects.filter(
+            source_type="enquete_voto", source_id=str(seeded.pk)
+        ).delete()
+        EnqueteExibicao.objects.filter(enquete=enquete, user=user).delete()
+        seeded.delete()
+
+        client = APIClient()
+        client.force_authenticate(user)
+        r = client.post(
+            reverse("enquete-vote", args=[enquete.pk]),
+            {"optionId": str(opcao.pk)},
+            format="json",
+            HTTP_X_WORKSPACE=str(enquete.organizacao_id),
+        )
+        self.assertIn(r.status_code, (200, 201), r.data)
+        api = EnqueteVoto.objects.get(enquete=enquete, user=user)
+        self.assertEqual(api.year_snapshot, year)
+        self.assertEqual(self.xp_by_workspace(user), xp_before)
+        self.assertEqual(
+            self.snapshot_progress(user, item__enquete=enquete), progress_before
+        )
+        self.assertEqual(
+            EnqueteExibicao.objects.get(enquete=enquete, user=user).outcome,
+            "respondida",
+        )
+
+    def test_progress_lines_are_printed(self):
+        for label in (
+            "Escolas e contas… ok",
+            "Submissões 0/",
+            "Submissões… ok",
+            "Votos… ok",
+        ):
+            self.assertIn(label, self.output)
+
+
+@override_settings(DEBUG=True)
+class ConsultasTests(TestCase):
+    """O seed corre contra bases remotas: o número de consultas tem de ficar baixo."""
+
+    def test_query_budget(self):
+        with CaptureQueriesContext(connection) as first:
+            seed()
+        with CaptureQueriesContext(connection) as second:
+            seed()
+        # Medido: ~180 na 1.ª execução e ~35 numa repetição (antes: ~7600 e ~660).
+        self.assertLess(len(first), 250)
+        self.assertLess(len(second), 60)
 
 
 @override_settings(DEBUG=True)

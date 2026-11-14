@@ -5,6 +5,29 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - `seed_demo` rápido contra bases remotas
+
+### Alterado
+
+- **O `seed_demo` passa a fazer as escritas em lote.** Contra uma base remota, com 100 a 300 ms por consulta, ficava minutos sem progresso visível. Agora lê tudo em poucas consultas, calcula em memória e escreve com `bulk_create`.
+  - **Consultas:** na 1.ª execução passam de 7 606 para 176; numa repetição, de 659 para 34.
+  - **Tempo:** num ensaio com 200 ms por consulta, a 1.ª execução com `--set-password` demora cerca de 40 s, e uma repetição cerca de 7 s.
+  - **Submissões:** deixam de passar uma a uma pela `QuizSubmissionView`, mas seguem as mesmas regras e usam as mesmas funções (`quiz_submission_xp`, `record_xp_many`, `stars_for`):
+    - workspace do quiz e 1.ª tentativa;
+    - XP no ledger por `(source_type, source_id)`;
+    - progresso dos passos `quiz` com estrelas.
+  - **Votos:** seguem as regras do `cast_vote` (exibição `respondida`, `ENQUETE_VOTE_XP`, progresso dos passos `enquete` e fecho ao atingir `sample_target`).
+  - **Enquetes e trilhas:** a criação e a publicação de enquetes e a publicação de trilhas continuam a passar pelos serviços, que validam e notificam.
+  - **Hashes de passwords:** uma password escolhida tem um único hash; as geradas são calculadas em paralelo.
+- **Progresso visível:** uma linha por fase ("Escolas e contas… ok", "Submissões 60/184…").
+- **Regra do XP de quizzes num só sítio:** a regra (10 XP por resposta certa, só na 1.ª tentativa) passa a viver em `rankings.services.quiz_submission_xp`, usada pela `QuizSubmissionView` e pelo seed. O comportamento da API não muda.
+
+### Adicionado
+
+- **`rankings.services.record_xp_many`:** versão em lote do `record_xp`, com as mesmas regras (ignora 0 XP e é idempotente por `(source_type, source_id)`).
+
+---
+
 ## [Não Lançado] - Dados de demonstração (`seed_demo`)
 
 ### Adicionado
