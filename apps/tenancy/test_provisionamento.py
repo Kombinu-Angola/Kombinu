@@ -283,6 +283,20 @@ class ProvisionMembersTests(APITestCase):
             Membership.objects.filter(student_code__startswith="L-").exists()
         )
 
+    def test_demo_domain_is_reserved(self):
+        rows = [
+            {"student_code": "D-1", "email": "admin.uan@demo.kombinu.com"},
+            {"student_code": "D-2", "email": "Admin.UAN@Demo.Kombinu.COM"},
+        ]
+        r = self._post(self.admin_a, self.org_a, rows)
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        by_row = {e["row"]: e["errors"] for e in r.data["errors"]}
+        self.assertIn("email", by_row[0])
+        self.assertIn("email", by_row[1])
+        self.assertFalse(
+            CustomUser.objects.filter(email__iendswith="@demo.kombinu.com").exists()
+        )
+
     def test_empty_batch_is_rejected(self):
         r = self._post(self.admin_a, self.org_a, [])
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
@@ -323,6 +337,8 @@ class CriarAdminOrganizacaoCommandTests(TestCase):
             self._run(self.org.code, email="existe@escola.ao")
         with self.assertRaises(CommandError):
             self._run(self.org.code, email="x@escola-a.kombinu.invalid")
+        with self.assertRaises(CommandError):
+            self._run(self.org.code, email="Admin.UAN@Demo.Kombinu.com")
         with self.assertRaises(CommandError):
             self._run("NAOEXISTE", email="novo@escola.ao")
         Organizacao.objects.filter(pk=self.org.pk).update(is_active=False)
