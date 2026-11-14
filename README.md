@@ -130,6 +130,29 @@ Antes de iniciar, certifique-se de ter instalado:
    - **API ReDoc**: [http://127.0.0.1:8000/api/redoc/](http://127.0.0.1:8000/api/redoc/)
    - **Admin**: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
+### Dados de demonstração (`seed_demo`)
+
+O comando enche a plataforma com dados fictícios para demonstrações. Cria duas escolas (`demo-uan` e `demo-colegio-kiala`), 24 contas em `@demo.kombinu.com` e 28 conteúdos (15 no marketplace). Cria também quizzes com submissões, trilhas publicadas com progresso, enquetes com votos e notificações.
+
+```bash
+python manage.py seed_demo                          # cria (ou completa) os dados demo
+python manage.py seed_demo --redefinir-passwords    # gera passwords novas para as contas demo
+python manage.py seed_demo --set-password           # pede (sem eco) uma password para todas as contas demo
+python manage.py seed_demo --limpar                 # remove só os dados demo
+```
+
+- **Idempotente:** correr de novo não duplica nada.
+- **Passwords:** a prioridade é `--set-password` > `SEED_DEMO_PASSWORD` > gerada com `secrets`.
+  - Uma password escolhida nunca é impressa; a tabela mostra só email e papel. As geradas aparecem uma única vez no fim, numa tabela email/papel/password.
+  - `--set-password` sem valor pede a password duas vezes, sem eco, e não a deixa no histórico do terminal nem na lista de processos. Também aceita `--set-password=<valor>`, mas avisa que a password fica no histórico da shell.
+  - A password escolhida passa pelos validadores do Django; se for recusada, o comando pára sem alterar nada.
+  - Também se aplica às contas demo que já existem, o que serve para as repor antes de uma demonstração. Contas fora de `@demo.kombinu.com` nunca são tocadas.
+  - A variável `SEED_DEMO_PASSWORD` exige pelo menos 12 caracteres.
+  - As contas demo não têm troca obrigatória de password.
+- **Domínio reservado:** o domínio `@demo.kombinu.com` não aceita registos nem provisionamento. Se já existirem contas nesse domínio antes da 1.ª execução, o comando recusa correr. Qualquer reposição de password invalida os tokens antigos.
+- **Produção:** com `DEBUG=False`, o comando só corre com `--confirmar-producao`, incluindo o `--limpar`.
+- **Limpeza segura:** o `--limpar` apaga só as contas `@demo.kombinu.com`, as organizações `demo-*` e o que delas depende. Se houver dados reais ligados aos de demonstração, recusa e não apaga nada. É o caso, por exemplo, de um utilizador real que respondeu a um quiz demo ou de uma trilha real que usa um conteúdo demo.
+
 ## Testes
 
 O projeto possui uma suíte completa de testes usando pytest.

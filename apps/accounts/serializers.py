@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from apps.tenancy.models import Membership
 
-from .institutional import is_technical_email
+from .institutional import is_reserved_email, is_technical_email
 from .models import CustomUser
 
 
@@ -22,7 +22,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         # O domínio técnico é reservado às contas institucionais (D1/D12).
-        if is_technical_email(value):
+        if is_reserved_email(value):
             raise serializers.ValidationError("Enter a valid email address.")
         if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")

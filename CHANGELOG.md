@@ -5,6 +5,36 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Dados de demonstração (`seed_demo`)
+
+### Adicionado
+
+- **Comando `python manage.py seed_demo`** para encher a plataforma com dados de demonstração:
+  - duas escolas: "Universidade Agostinho Neto (Demo)" e "Colégio Kiala (Demo)";
+  - 24 contas em `@demo.kombinu.com`: admins, professores, criadores do marketplace e estudantes, alguns só no marketplace e dois nas duas escolas;
+  - 28 conteúdos com texto completo, 15 deles no marketplace, nas três categorias;
+  - quizzes com submissões, trilhas publicadas (sequenciais e livres) com progresso, enquetes com votos (uma já encerrada) e notificações por workspace.
+- As submissões passam pela `QuizSubmissionView`, e as enquetes e trilhas pelos serviços normais. Assim, o ledger de XP, os rankings por workspace e o progresso ficam consistentes com a API.
+- É idempotente: correr de novo não duplica nada.
+
+### Segurança
+
+- **Passwords:** nenhuma está fixa no código. A prioridade é `--set-password` > `SEED_DEMO_PASSWORD` (mínimo de 12 caracteres) > gerada com `secrets`. As geradas são mostradas uma única vez no terminal; uma password escolhida nunca é impressa.
+- **`--set-password`:** usa uma password escolhida em todas as contas demo, incluindo as que já existem, para as repor antes de uma demonstração. Contas fora de `@demo.kombinu.com` não são tocadas.
+  - Sem valor, pede a password duas vezes com `getpass` (sem eco), para não ficar no histórico do terminal nem na lista de processos.
+  - Com `--set-password=<valor>`, avisa que a password fica no histórico da shell.
+  - Passa pelos validadores do Django (`validate_password`); se falhar, pára sem criar nem alterar nada.
+- **Domínio `@demo.kombinu.com` reservado.** Antes, qualquer pessoa podia registar um email demo (o repositório é público) antes da 1.ª execução do seed. O seed reutilizaria essa conta e dar-lhe-ia o papel, por exemplo admin de uma escola demo, com a password escolhida por quem a registou. Agora:
+  - o registo público recusa o domínio (sem diferenciar maiúsculas, incluindo subdomínios), com a mesma mensagem genérica de um email inválido;
+  - o provisionamento em lote e o comando `criar_admin_organizacao` também o recusam;
+  - nenhum endpoint permite mudar o email de uma conta.
+- **O `seed_demo` recusa correr** se já existirem contas `@demo.kombinu.com` sem as escolas demo, ou seja, contas criadas fora do comando. A mensagem diz quantas são, sem mostrar os emails.
+- **Tokens antigos invalidados:** sempre que o `seed_demo` define ou repõe uma password (criação, `--redefinir-passwords`, `--set-password`), actualiza o `password_changed_at`, o que invalida os tokens emitidos antes.
+- **Produção:** com `DEBUG=False`, o comando recusa correr sem `--confirmar-producao`.
+- **`--limpar`:** remove só os dados de demonstração, pela ordem dos `PROTECT`. Se encontrar dados reais ligados aos de demonstração, recusa e não apaga nada.
+
+---
+
 ## [Não Lançado] - Enquetes: campo isOwner
 
 ### Adicionado

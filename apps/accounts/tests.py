@@ -120,6 +120,23 @@ class AuthAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", response.data)
 
+    def test_register_rejects_demo_domain(self):
+        for email in (
+            "admin.uan@demo.kombinu.com",
+            "Admin.UAN@Demo.Kombinu.COM",
+            "ADMIN.KIALA@DEMO.KOMBINU.COM",
+            "alguem@sub.demo.kombinu.com",
+        ):
+            data = {**self.user_data, "email": email}
+            response = self.client.post(self.register_url, data, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, email)
+            self.assertIn("email", response.data)
+            # Mesma mensagem genérica de um email inválido: não revela a reserva.
+            self.assertNotIn("demo", str(response.data).lower())
+        self.assertFalse(
+            CustomUser.objects.filter(email__icontains="demo.kombinu.com").exists()
+        )
+
     def test_register_user_missing_fields(self):
         """Testa o registro faltando campos obrigatórios"""
         data = {"email": "incomplete@example.com"}
