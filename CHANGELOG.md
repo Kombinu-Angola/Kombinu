@@ -5,6 +5,26 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Dados de demonstração (`seed_demo`)
+
+### Adicionado
+
+- **Comando `python manage.py seed_demo`** para encher a plataforma com dados de demonstração:
+  - duas escolas: "Universidade Agostinho Neto (Demo)" e "Colégio Kiala (Demo)";
+  - 24 contas em `@demo.kombinu.com`: admins, professores, criadores do marketplace e estudantes, alguns só no marketplace e dois nas duas escolas;
+  - 28 conteúdos com texto completo, 15 deles no marketplace, nas três categorias;
+  - quizzes com submissões, trilhas publicadas (sequenciais e livres) com progresso, enquetes com votos (uma já encerrada) e notificações por workspace.
+- As submissões passam pela `QuizSubmissionView`, e as enquetes e trilhas pelos serviços normais. Assim, o ledger de XP, os rankings por workspace e o progresso ficam consistentes com a API.
+- É idempotente: correr de novo não duplica nada.
+
+### Segurança
+
+- **Passwords:** nenhuma está fixa no código. São geradas com `secrets` e mostradas uma única vez no terminal, ou vêm de `SEED_DEMO_PASSWORD` (mínimo de 12 caracteres, nunca impressa).
+- **Produção:** com `DEBUG=False`, o comando recusa correr sem `--confirmar-producao`.
+- **`--limpar`:** remove só os dados de demonstração, pela ordem dos `PROTECT`. Se encontrar dados reais ligados aos de demonstração, recusa e não apaga nada.
+
+---
+
 ## [Não Lançado] - Enquetes: campo isOwner
 
 ### Adicionado

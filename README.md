@@ -130,6 +130,21 @@ Antes de iniciar, certifique-se de ter instalado:
    - **API ReDoc**: [http://127.0.0.1:8000/api/redoc/](http://127.0.0.1:8000/api/redoc/)
    - **Admin**: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
+### Dados de demonstração (`seed_demo`)
+
+O comando enche a plataforma com dados fictícios para demonstrações. Cria duas escolas (`demo-uan` e `demo-colegio-kiala`), 24 contas em `@demo.kombinu.com` e 28 conteúdos (15 no marketplace). Cria também quizzes com submissões, trilhas publicadas com progresso, enquetes com votos e notificações.
+
+```bash
+python manage.py seed_demo                          # cria (ou completa) os dados demo
+python manage.py seed_demo --redefinir-passwords    # gera passwords novas para as contas demo
+python manage.py seed_demo --limpar                 # remove só os dados demo
+```
+
+- **Idempotente:** correr de novo não duplica nada.
+- **Passwords:** são geradas com `secrets` e mostradas uma única vez no fim, numa tabela email/papel/password. Se a variável `SEED_DEMO_PASSWORD` estiver definida (mínimo de 12 caracteres), todas as contas usam esse valor e ele não é impresso. As contas demo não têm troca obrigatória de password.
+- **Produção:** com `DEBUG=False`, o comando só corre com `--confirmar-producao`, incluindo o `--limpar`.
+- **Limpeza segura:** o `--limpar` apaga só as contas `@demo.kombinu.com`, as organizações `demo-*` e o que delas depende. Se houver dados reais ligados aos de demonstração, recusa e não apaga nada. É o caso, por exemplo, de um utilizador real que respondeu a um quiz demo ou de uma trilha real que usa um conteúdo demo.
+
 ## Testes
 
 O projeto possui uma suíte completa de testes usando pytest.
