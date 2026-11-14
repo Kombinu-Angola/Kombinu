@@ -15,7 +15,7 @@ from django.utils import timezone
 from apps.accounts.institutional import (
     TEMP_PASSWORD_VALIDITY,
     generate_temporary_password,
-    is_technical_email,
+    is_reserved_email,
 )
 from apps.accounts.models import CustomUser
 from apps.tenancy.codes import normalize_org_code
@@ -44,7 +44,7 @@ class Command(BaseCommand):
             validate_email(email)
         except ValidationError:
             raise CommandError("Email inválido.")
-        if is_technical_email(email):
+        if is_reserved_email(email):
             raise CommandError("Domínio de email reservado.")
         if CustomUser.objects.filter(email__iexact=email).exists():
             # D12: não anexar a uma conta existente sem consentimento.

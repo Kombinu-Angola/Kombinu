@@ -11,7 +11,7 @@ from django.utils import timezone
 from apps.accounts.institutional import (
     TEMP_PASSWORD_VALIDITY,
     generate_temporary_password,
-    is_technical_email,
+    is_reserved_email,
     technical_email,
 )
 from apps.accounts.models import CustomUser
@@ -85,7 +85,7 @@ def validate_batch(organizacao, rows):
 
         email = row["email"]
         if email:
-            if is_technical_email(email):
+            if is_reserved_email(email):
                 row_errors["email"] = ["Domínio de email reservado."]
             elif email in seen_emails:
                 row_errors["email"] = ["Email repetido neste lote."]

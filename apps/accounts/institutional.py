@@ -14,6 +14,9 @@ from apps.tenancy.models import Membership
 from .models import CustomUser
 
 TECHNICAL_EMAIL_DOMAIN = "kombinu.invalid"
+# Contas do `manage.py seed_demo`. Reservado: nenhum caminho público cria
+# contas neste domínio, para ninguém se antecipar ao seed e herdar um papel.
+DEMO_EMAIL_DOMAIN = "demo.kombinu.com"
 
 # D5: password temporária de uso único, sem caracteres ambíguos (0/O, 1/l/I).
 TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
@@ -34,6 +37,18 @@ def technical_email(student_code, organizacao):
 
 def is_technical_email(email):
     return (email or "").strip().lower().endswith("." + TECHNICAL_EMAIL_DOMAIN)
+
+
+def is_demo_email(email):
+    email = (email or "").strip().lower()
+    return email.endswith("@" + DEMO_EMAIL_DOMAIN) or email.endswith(
+        "." + DEMO_EMAIL_DOMAIN
+    )
+
+
+def is_reserved_email(email):
+    """Domínios que só o sistema usa: técnico (institucional) e demonstração."""
+    return is_technical_email(email) or is_demo_email(email)
 
 
 def temp_password_expired(user):
