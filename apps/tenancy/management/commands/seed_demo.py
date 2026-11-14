@@ -137,6 +137,7 @@ class Command(BaseCommand):
             source = None
 
         self._check_orgs_are_demo()
+        self._check_no_preexisting_demo_accounts()
         # Com --set-password, as contas demo que já existem também ficam com ela.
         reset = options["redefinir_passwords"] or source == "set"
         with transaction.atomic():
@@ -177,6 +178,22 @@ class Command(BaseCommand):
                 f"({', '.join(DEMO_SLUGS)}). Nada foi alterado."
             )
 
+    def _check_no_preexisting_demo_accounts(self):
+        """
+        Antes da 1.ª execução não pode haver contas no domínio demo: seriam
+        contas criadas por outra via, que o seed reutilizaria e às quais daria
+        papéis (ex.: admin de uma escola demo).
+        """
+        if demo_orgs().count() == len(DEMO_SLUGS):
+            return
+        n = demo_users().count()
+        if n:
+            raise CommandError(
+                f"Já existem {n} contas @{dados.DEMO_EMAIL_DOMAIN} sem as escolas "
+                "de demonstração, ou seja, criadas fora deste comando. Reveja-as "
+                "no admin antes de continuar. Nada foi alterado."
+            )
+
     # -------------------------------------------------------------------- seed
     def seed(self, fixed_password, reset_passwords):
         now = timezone.now()
@@ -214,6 +231,8 @@ class Command(BaseCommand):
             elif reset_passwords:
                 password = fixed_password or generate_temporary_password()
                 user.set_password(password)
+                # Explícito: invalida os tokens emitidos antes desta reposição.
+                user.password_changed_at = now
                 user.must_change_password = False
                 user.temp_password_expires_at = None
                 user.save()

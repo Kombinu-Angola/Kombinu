@@ -3,7 +3,7 @@ Dados do `seed_demo`. Tudo fictício e identificável como demonstração: conta
 em `@demo.kombinu.com` e organizações com slug `demo-*`.
 """
 
-DEMO_EMAIL_DOMAIN = "demo.kombinu.com"
+from apps.accounts.institutional import DEMO_EMAIL_DOMAIN  # noqa: F401
 
 # chave -> dados da organização (slug fixo: é por ele que o --limpar a encontra)
 ORGANIZACOES = {

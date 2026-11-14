@@ -149,6 +149,7 @@ python manage.py seed_demo --limpar                 # remove só os dados demo
   - Também se aplica às contas demo que já existem, o que serve para as repor antes de uma demonstração. Contas fora de `@demo.kombinu.com` nunca são tocadas.
   - A variável `SEED_DEMO_PASSWORD` exige pelo menos 12 caracteres.
   - As contas demo não têm troca obrigatória de password.
+- **Domínio reservado:** o domínio `@demo.kombinu.com` não aceita registos nem provisionamento. Se já existirem contas nesse domínio antes da 1.ª execução, o comando recusa correr. Qualquer reposição de password invalida os tokens antigos.
 - **Produção:** com `DEBUG=False`, o comando só corre com `--confirmar-producao`, incluindo o `--limpar`.
 - **Limpeza segura:** o `--limpar` apaga só as contas `@demo.kombinu.com`, as organizações `demo-*` e o que delas depende. Se houver dados reais ligados aos de demonstração, recusa e não apaga nada. É o caso, por exemplo, de um utilizador real que respondeu a um quiz demo ou de uma trilha real que usa um conteúdo demo.
 

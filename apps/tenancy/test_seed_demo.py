@@ -1,6 +1,7 @@
 """Comando `seed_demo`: idempotência, limpeza segura e isolamento."""
 
 import os
+from datetime import timedelta
 from io import StringIO
 from unittest import mock
 
@@ -8,7 +9,9 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
@@ -216,6 +219,41 @@ class SeededTests(TestCase):
             seed(set_password="12345678", stderr=StringIO())
         self.assertEqual(dict(demo_users().values_list("pk", "password")), before)
 
+    # ----------------------------------------------- revogação de tokens antigos
+    def old_token(self, user):
+        """Token emitido há uma hora, depois da última troca de password."""
+        CustomUser.objects.filter(pk=user.pk).update(
+            password_changed_at=timezone.now() - timedelta(days=1)
+        )
+        token = AccessToken.for_user(user)
+        token["iat"] = int(timezone.now().timestamp()) - 3600
+        return str(token)
+
+    def status_with(self, token):
+        client = APIClient()
+        r = client.get(reverse("content-list"), HTTP_AUTHORIZATION=f"Bearer {token}")
+        return r.status_code
+
+    def test_set_password_revokes_old_tokens(self):
+        user = demo_users().first()
+        token = self.old_token(user)
+        self.assertEqual(self.status_with(token), 200)
+        seed(set_password="Reuniao-Kombinu-2026", stderr=StringIO())
+        self.assertEqual(self.status_with(token), 401)
+
+    def test_reset_passwords_revokes_old_tokens(self):
+        user = demo_users().first()
+        token = self.old_token(user)
+        self.assertEqual(self.status_with(token), 200)
+        seed(redefinir_passwords=True)
+        self.assertEqual(self.status_with(token), 401)
+
+    def test_rerun_without_reset_keeps_tokens(self):
+        user = demo_users().first()
+        token = self.old_token(user)
+        seed()
+        self.assertEqual(self.status_with(token), 200)
+
     # ----------------------------------------------------------------- limpar
     def test_limpar_removes_only_demo(self):
         seed(limpar=True)
@@ -332,6 +370,27 @@ class UnseededTests(TestCase):
             with self.assertRaises(CommandError):
                 seed_args("--set-password")
         self.assertFalse(CustomUser.objects.exists())
+
+    def test_seed_refuses_preexisting_demo_accounts(self):
+        # Contas registadas no domínio demo antes da 1.ª execução (ex.: por um
+        # caminho antigo de registo) não podem herdar papéis.
+        for email in ("admin.uan@demo.kombinu.com", "Outra@Demo.Kombinu.com"):
+            CustomUser.objects.create_user(
+                username=email, email=email, password="x", user_type="learner"
+            )
+        with self.assertRaises(CommandError) as ctx:
+            seed()
+        message = str(ctx.exception)
+        self.assertIn("2 contas", message)
+        self.assertNotIn("admin.uan", message.lower())
+        self.assertNotIn("outra", message.lower())
+        self.assertFalse(Organizacao.objects.filter(slug__startswith="demo-").exists())
+        self.assertFalse(Membership.objects.exists())
+        self.assertTrue(
+            CustomUser.objects.get(email="admin.uan@demo.kombinu.com").check_password(
+                "x"
+            )
+        )
 
     def test_limpar_without_demo_data_is_harmless(self):
         create_real_data(self)
