@@ -5,6 +5,17 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Conteúdos: N+1 na listagem
+
+### Corrigido
+
+- **`GET /api/contents/` com número de consultas constante.**
+  - **A causa:** o `ContentViewSet` não carregava o `creator` nem a relação inversa `quiz`, que é usada pelas propriedades `has_quiz` e `quiz_id`. Cada conteúdo fazia 2 a 3 consultas: uma página de 20 fazia 42 no marketplace e 43 num workspace. Em produção, com a latência até à base, isto dava cerca de 7 s por página.
+  - **A correcção:** `select_related("creator", "quiz")`. A listagem passa a fazer 2 consultas (3 num workspace, com a validação da membership), seja qual for o número de conteúdos, e o detalhe passa de 3 para 1.
+  - **O que não muda:** o filtro `has_quiz`, os campos e os valores da resposta, e o scoping por workspace.
+
+---
+
 ## [Não Lançado] - CORS: header `X-Workspace`
 
 ### Corrigido
