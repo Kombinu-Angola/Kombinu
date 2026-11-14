@@ -1,6 +1,7 @@
 from django.db import models
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
+from apps.tenancy.querysets import OrganizacaoQuerySet
 import uuid
 
 
@@ -11,6 +12,16 @@ class Quiz(models.Model):
         Content, on_delete=models.CASCADE, related_name="quiz"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    organizacao = models.ForeignKey(
+        "tenancy.Organizacao",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="quizzes",
+        help_text="NULL = marketplace (B2C).",
+    )
+
+    objects = OrganizacaoQuerySet.as_manager()
 
     def __str__(self):
         return self.title
@@ -39,12 +50,33 @@ class Option(models.Model):
 
 class QuizSubmission(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    quiz = models.ForeignKey(Quiz, on_delete=models.PROTECT)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    # `score` mantém-se por compatibilidade (rankings/dashboard somam-no) e
+    # espelha `xp_awarded`: XP concedido nesta tentativa.
     score = models.PositiveIntegerField()
+    attempt = models.PositiveSmallIntegerField(default=1)
+    correct_count = models.PositiveIntegerField(default=0)
+    total_questions = models.PositiveIntegerField(default=0)
+    xp_awarded = models.PositiveIntegerField(default=0)
+    organizacao = models.ForeignKey(
+        "tenancy.Organizacao",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="quiz_submissions",
+        help_text="NULL = marketplace (B2C).",
+    )
+
+    objects = OrganizacaoQuerySet.as_manager()
 
     class Meta:
-        unique_together = ("user", "quiz")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "quiz", "attempt"],
+                name="unique_submission_user_quiz_attempt",
+            )
+        ]
 
     def __str__(self):
         return f"{self.user.email} - {self.quiz.title} - Score: {self.score}"

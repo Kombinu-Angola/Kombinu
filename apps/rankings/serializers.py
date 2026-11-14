@@ -2,8 +2,8 @@ from rest_framework import serializers
 
 
 class TopUserSerializer(serializers.Serializer):
-    user_id = serializers.UUIDField()
-    email = serializers.EmailField()
+    user_id = serializers.IntegerField()
+    name = serializers.CharField()
     total_score = serializers.IntegerField()
     position = serializers.IntegerField()
 

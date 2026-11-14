@@ -1,8 +1,8 @@
 # Kombinu - Plataforma Educacional
 
 [![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/downloads/)
-[![Django](https://img.shields.io/badge/django-4.2+-green.svg)](https://www.djangoproject.com/)
+[![Python](https://img.shields.io/badge/python-3.13-green.svg)](https://www.python.org/downloads/)
+[![Django](https://img.shields.io/badge/django-5.2_LTS-green.svg)](https://www.djangoproject.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Sistema Django com API REST para gestão de conteúdos educacionais, quizzes interativos, rankings e gamificação.
@@ -51,8 +51,8 @@ A aplicação está disponível online em: **[https://kombinu.onrender.com](http
 
 Antes de iniciar, certifique-se de ter instalado:
 
-- Python 3.8+
-- Django 4+
+- Python 3.13 (fixado em `.python-version`, que o Render lê no build)
+- Django 5.2 LTS (suporte até Abril de 2028)
 - Django REST Framework
 - Pip e virtualenv (recomendado)
 
@@ -111,6 +111,13 @@ Antes de iniciar, certifique-se de ter instalado:
    python manage.py createsuperuser
    ```
 
+   Para criar o 1.º admin de uma organização (escola), com password temporária
+   de troca obrigatória, mostrada uma única vez:
+
+   ```bash
+   python manage.py criar_admin_organizacao <slug-ou-código-da-escola> --email admin@escola.ao --first-name Nome
+   ```
+
 7. **Inicie o servidor:**
 
    ```bash
@@ -144,6 +151,12 @@ pytest apps/quizzes/tests.py
 # Executar com cobertura (requer pytest-cov)
 pytest --cov=apps
 ```
+
+O `pytest` usa `core/settings_test.py` (definido no `pytest.ini`), que herda
+de `core/settings.py` e só troca o hasher de passwords por MD5 para a suite
+correr rápido. Esse ficheiro nunca é carregado em produção: `manage.py`, WSGI
+e ASGI usam `core.settings`. Com `python manage.py test` o hasher é o real
+(PBKDF2) e a suite fica muito mais lenta.
 
 ### Cobertura de Testes
 
@@ -184,8 +197,10 @@ backend/
 | Rota | Método | Descrição |
 | --- | --- | --- |
 | `/api/auth/register/` | POST | Registo de utilizadores |
-| `/api/auth/login/` | POST | Login — devolve access + refresh JWT |
-| `/api/auth/token/refresh/` | POST | Renovar access token sem novo login |
+| `/api/auth/login/` | POST | Login por email — devolve `access_token`, `refresh_token` e `user` (com `memberships` e `must_change_password`) |
+| `/api/auth/institutional/login/` | POST | Login institucional: `{ school_code, student_code, password }` (`school_code` = código de 6 caracteres da escola, não o UUID). Mesmo envelope; qualquer falha → 401 igual |
+| `/api/auth/password/change/` | POST | `{ current_password, new_password }` → novos `access_token`/`refresh_token`; os anteriores deixam de valer |
+| `/api/auth/token/refresh/` | POST | `{ refresh }` → `{ access, refresh }`: novo access e novo refresh (guardar os dois). 401 `token_not_valid` se a password mudou depois de o refresh ser emitido |
 | `/api/auth/profile/` | GET | Perfil com nome, pontos (XP) e nível |
 | `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
 | `/api/dashboard/learner/courses/` | GET | Cursos frequentados |
@@ -197,11 +212,41 @@ backend/
 | `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
 | `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
+| `/api/enquetes/` | GET/POST | Enquetes do `X-Workspace`: publicadas e fechadas, mais os rascunhos do próprio. POST (teacher/admin; `creator` no marketplace) cria em `rascunho` |
+| `/api/enquetes/{id}/publish/` · `/close/` | POST | Criador: `rascunho` → `activa` (publicada) → `encerrada` (fechada). Transição inválida → 409. Só se vota em `activa` |
+| `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho |
+| `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
+| `/api/trilhas/{id}/publish/` | POST | Publicar (exige pelo menos um passo) |
+| `/api/trilhas/{id}/archive/` · `/unarchive/` | POST | Arquivar ou desarquivar (criador). Arquivada, sai das listagens dos alunos; o progresso mantém-se |
+| `/api/trilhas/{id}/items/` | POST | Acrescentar um passo `{ kind, targetId, titleOverride?, summary?, minutes?, xpReward? }`; o alvo tem de ser do mesmo workspace da trilha |
+| `/api/trilhas/{id}/items/{itemId}/` | PATCH/DELETE | Editar metadados ou remover um passo (409 se tem progresso) |
+| `/api/trilhas/{id}/items/reorder/` | POST | `{ itemIds: [...] }` com todos os passos pela nova ordem |
+| `/api/notifications/` | GET | Notificações do próprio utilizador no `X-Workspace` activo (escola → só dessa escola; marketplace → só do marketplace), paginadas; `?unread=true`. Item: `{ id, category, tone, title, body, at, read, target: { kind, id } \| null }` |
+| `/api/notifications/unread-count/` | GET | `{ count }` no contexto activo. Para polling (sugestão: 60 s); throttle 60/min |
+| `/api/notifications/{id}/read/` | POST | Marcar como lida (idempotente). De outro utilizador ou contexto → 404 |
+| `/api/notifications/read-all/` | POST | Marcar todas como lidas, só no contexto activo → `{ updated }` |
+| `/api/tenancy/members/` | GET | Membros da organização do `X-Workspace` (só admin), paginado; filtros `role`, `is_active`, `search`. Nunca devolve o email técnico |
+| `/api/tenancy/members/{id}/deactivate/` · `/reactivate/` | POST | Desactivar ou reactivar a pertença (a conta e o XP mantêm-se). Um admin não se desactiva a si próprio e a organização mantém sempre um admin activo |
+| `/api/tenancy/members/{id}/reset-password/` | POST | Nova password temporária (7 dias, troca obrigatória), mostrada uma vez; revoga as sessões. Só para contas provisionadas pela organização e sem pertença a outra |
+| `/api/tenancy/marketplace-visit/` | POST | Chamado pelo seletor de workspace ao mudar para o marketplace. Regista a 1.ª entrada no marketplace por escola de origem (idempotente). Responde sempre 204 |
+| `/api/tenancy/members/bulk/` | POST | Provisionamento em lote pelo admin da organização do `X-Workspace`: `{ dry_run, rows: [{ student_code, first_name, last_name, role, academic_year, faculty, course, email }] }`. Tudo ou nada, até `PROVISIONING_MAX_ROWS` linhas (20 por omissão); devolve as passwords temporárias uma única vez |
+
+**Workspace activo (`X-Workspace`):** os endpoints de conteúdos, quizzes,
+ranking, dashboards, trilhas, enquetes e organizações leem o header
+`X-Workspace` (UUID da organização, o `organizacao_id` de `user.memberships`,
+ou `marketplace`; ausente = marketplace). Exige pertença activa: UUID inválido
+→ 400, sem pertença → 403, objectos de outro contexto → 404. O Swagger mostra
+o header em cada um destes endpoints.
 
 **Limites de pedidos (provisórios):** login 30/min por IP e 5/min por conta;
 registo 10/hora por IP; refresh 30/min por IP. Acima do limite a API devolve
 `429 Too Many Requests`. Na submissão de quiz, cada pergunta só pode ser
-respondida uma vez por pedido (respostas repetidas devolvem `400`).
+respondida uma vez por pedido (respostas repetidas devolvem `400`). A troca de
+password está limitada a 10/hora por utilizador (provisório).
+
+**Troca obrigatória:** enquanto `user.must_change_password` for `true`, qualquer
+endpoint autenticado devolve `403 { "detail", "code": "password_change_required" }`,
+excepto `POST /api/auth/password/change/` e o refresh do token.
 
 ### Documentação
 
@@ -260,7 +305,7 @@ Você também pode acessar a documentação interativa através das rotas:
 
 ## Tecnologias Utilizadas
 
-- **Backend**: Django 4+, Django REST Framework
+- **Backend**: Django 5.2 LTS, Django REST Framework
 - **Banco de Dados**: SQLite (desenvolvimento) / PostgreSQL (produção)
 - **Autenticação**: Token-based authentication
 - **Documentação**: drf-spectacular (OpenAPI/Swagger)

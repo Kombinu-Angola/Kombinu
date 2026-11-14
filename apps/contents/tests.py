@@ -12,13 +12,13 @@ class ContentModelTest(TestCase):
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         self.content = Content.objects.create(
             title="Test Content",
             description="Test description",
             creator=self.creator,
-            category="tecnologia"
+            category="tecnologia",
         )
 
     def test_content_creation(self):
@@ -47,7 +47,7 @@ class ContentModelTest(TestCase):
                 title=f"Content {category}",
                 description="Test description",
                 creator=self.creator,
-                category=category
+                category=category,
             )
             self.assertEqual(content.category, category)
 
@@ -63,19 +63,19 @@ class ContentAPITest(APITestCase):
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         self.learner = CustomUser.objects.create_user(
             username="learner@example.com",
             email="learner@example.com",
             password="learnerpass123",
-            user_type="learner"
+            user_type="learner",
         )
         self.content = Content.objects.create(
             title="Existing Content",
             description="Description",
             creator=self.creator,
-            category="tecnologia"
+            category="tecnologia",
         )
 
     def test_list_contents_authenticated(self):
@@ -83,7 +83,7 @@ class ContentAPITest(APITestCase):
         self.client.force_authenticate(user=self.learner)
         response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(len(response.data["results"]), 1)
 
     def test_list_contents_unauthenticated(self):
         """Testa listar conteúdos sem autenticação"""
@@ -96,7 +96,7 @@ class ContentAPITest(APITestCase):
         data = {
             "title": "New Content",
             "description": "New Description",
-            "category": "negocios"
+            "category": "negocios",
         }
         response = self.client.post(self.list_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -109,7 +109,7 @@ class ContentAPITest(APITestCase):
         data = {
             "title": "Learner Content",
             "description": "Should fail",
-            "category": "design"
+            "category": "design",
         }
         response = self.client.post(self.list_url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -117,14 +117,15 @@ class ContentAPITest(APITestCase):
     def test_filter_by_has_quiz(self):
         """Testa filtrar conteúdos por has_quiz"""
         from apps.quizzes.models import Quiz
+
         Quiz.objects.create(title="Quiz", content=self.content)
-        
+
         self.client.force_authenticate(user=self.learner)
-        
+
         # Filter has_quiz=true
         response = self.client.get(self.list_url, {"has_quiz": "true"})
-        self.assertEqual(len(response.data['results']), 1)
-        
+        self.assertEqual(len(response.data["results"]), 1)
+
         # Filter has_quiz=false
         response = self.client.get(self.list_url, {"has_quiz": "false"})
-        self.assertEqual(len(response.data['results']), 0)
+        self.assertEqual(len(response.data["results"]), 0)

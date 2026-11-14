@@ -69,6 +69,10 @@ LOCAL_APPS = [
     "apps.contents.apps.ContentsConfig",
     "apps.quizzes.apps.QuizzesConfig",
     "apps.rankings.apps.RankingsConfig",
+    "apps.tenancy.apps.TenancyConfig",
+    "apps.enquetes.apps.EnquetesConfig",
+    "apps.trilhas.apps.TrilhasConfig",
+    "apps.notificacoes.apps.NotificacoesConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_APPS + LOCAL_APPS
@@ -178,7 +182,14 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # Whitenoise configuration
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# STATICFILES_STORAGE deixou de existir no Django 5.1; sem STORAGES o
+# whitenoise perdia em silêncio a compressão e o manifest.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -189,14 +200,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Django REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.accounts.authentication.PasswordAwareJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "apps.tenancy.schema.WorkspaceAutoSchema",
     # Valores provisórios (D8 do relatório de auth institucional). A cache
     # por omissão é local a cada processo: com N workers o limite efectivo
     # é até N vezes maior.
@@ -205,6 +216,10 @@ REST_FRAMEWORK = {
         "login_identifier": "5/min",
         "register": "10/hour",
         "token_refresh": "30/min",
+        "password_change": "10/hour",
+        "provisioning": "30/hour",
+        "marketplace_visit": "30/hour",
+        "notifications_unread": "60/min",
     },
     # Nº de proxies à frente da app, para ler o IP do cliente em
     # X-Forwarded-For. Sem valor, o DRF usa o cabeçalho inteiro como chave.
@@ -213,6 +228,11 @@ REST_FRAMEWORK = {
     else None,
 }
 
+# Provisionamento em lote (D4): cada conta faz um hash PBKDF2, por isso o lote
+# tem de caber no timeout do worker (gunicorn: 30 s por omissão). Ajustar
+# depois de medir o custo do hash no servidor de produção.
+PROVISIONING_MAX_ROWS = int(os.getenv("PROVISIONING_MAX_ROWS", "20"))
+
 # Cofirguration for drf_spectacular
 SPECTACULAR_SETTINGS = {
     "TITLE": "Kombinu API",
@@ -220,8 +240,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "2.7.2",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
+    # A API autentica por Bearer JWT; sem esta classe na lista o Swagger
+    # não mostrava autenticação nenhuma.
     "AUTHENTICATION_WHITELIST": [
-        "rest_framework.authentication.TokenAuthentication",
+        "apps.accounts.authentication.PasswordAwareJWTAuthentication",
     ],
     "SERVE_AUTHENTICATION": [
         "rest_framework.authentication.TokenAuthentication",
@@ -244,7 +266,9 @@ from datetime import timedelta
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ROTATE_REFRESH_TOKENS": False,
+    # D7: cada refresh devolve também um refresh novo. Sem blacklist: o
+    # anterior vale até expirar, salvo troca de password (password_changed_at).
+    "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": False,
     "ALGORITHM": "HS256",

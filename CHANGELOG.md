@@ -5,6 +5,401 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Enquetes: campo isOwner
+
+### Adicionado
+
+- **`isOwner`** (boolean, só de leitura) nas Enquetes, em `GET /api/enquetes/` e `GET /api/enquetes/{id}/`. Vale `true` quando o utilizador autenticado é o criador. Aparece tanto na vista do votante (`EnqueteVoterSerializer`) como na do criador (`EnqueteOwnerSerializer`, onde é sempre `true`), e as respostas das acções `publish/` e `close/` também o trazem. O frontend pode assim esconder "Ver resultados" e "Activar" a quem não é dono. O valor é calculado a partir de `creator_id`, sem consultas extra na lista. Nenhum outro campo muda e o isolamento entre workspaces continua igual.
+
+---
+
+## [Não Lançado] - Limpeza: black nos testes e sem drf-yasg (B5)
+
+### Removido
+
+- **`drf-yasg`** do `requirements.txt`. Não era importado nem estava no `INSTALLED_APPS`; a documentação da API é gerada só pelo `drf-spectacular`. Validado num venv novo instalado só a partir do `requirements.txt`: suite completa, `manage.py check` e geração do schema.
+
+### Alterado
+
+- Ficheiros de teste formatados com o `black`. Só formatação, sem mudanças de comportamento.
+- **`drf-spectacular` fixado em `>=0.28,<0.29`** (antes `<1.0`), por decisão minha. Uma instalação nova trazia a 0.30, que muda os `operationId` (ex.: `api_auth_login_create` → `auth_login_create`) e as tags do Swagger. Assim, o release não traz mudanças no schema que não testámos.
+
+---
+
+## [Não Lançado] - Conversão B2B → B2C (B4)
+
+### Adicionado
+
+- **`POST /api/tenancy/marketplace-visit/`** (autenticado, sem corpo): o seletor de workspace do frontend chama-o ao mudar para o marketplace. Regista a primeira entrada no marketplace por cada escola de origem em que o utilizador é membro activo. É idempotente e responde sempre 204, incluindo para quem não pertence a nenhuma escola. Throttle `marketplace_visit`: 30/hora por utilizador (provisório).
+- **`ConversaoMarketplace`** (migração `tenancy/0006`, aditiva): `user`, `organizacao` de origem, `first_visit_at`, único por (utilizador, organização). Só leitura no Django admin.
+- **Porquê um endpoint explícito em vez de registar em cada pedido:** não acrescenta escritas ao tráfego normal; evita falsos positivos (um pedido sem `X-Workspace` cai no marketplace por omissão); e não mexe no `resolve_workspace`.
+
+### Segurança
+
+- Os dados não são expostos ao admin da escola (que alunos visitaram o marketplace), por privacidade (ver D14). Uma métrica agregada fica para depois.
+
+### Testes
+
+- 10 testes novos (`apps/tenancy/test_conversao.py`): idempotência, uma linha por escola, pertença ou organização inactiva ignoradas, só o próprio utilizador, o header não muda o resultado, 401, 405 e throttle.
+
+---
+
+## [Não Lançado] - Notificações por workspace (B3)
+
+### Adicionado
+
+- **App `notificacoes`** com o modelo `Notificacao` (migração `notificacoes/0001`):
+  - `user`, `organizacao` (NULL = marketplace), `category` (`gamificacao | conteudo | conta`), `tone` (`urgente | informativo | neutro`), `title`, `body`, `target_type` + `target_id`, `source_key`, `read_at`, `created_at`;
+  - único por (utilizador, `source_key`), o que torna a geração idempotente;
+  - índice em (utilizador, organização, lida);
+  - só leitura no admin.
+- **Endpoints** (`X-Workspace`; sempre filtrados pelo próprio utilizador **e** por `for_context`):
+  - `GET /api/notifications/` (paginado, `?unread=true`);
+  - `GET /api/notifications/unread-count/` → `{ count }` (throttle `notifications_unread`: 60/min);
+  - `POST /api/notifications/{id}/read/`;
+  - `POST /api/notifications/read-all/` → `{ updated }` (só no contexto activo).
+- O item segue o `AppNotification` do frontend: `{ id, category, tone, title, body, at, read, target }`. O `icon` e o `href` são derivados no frontend a partir de `target: { kind, id }`.
+- **Geração** (`notificacoes/services.py`, na transacção da publicação):
+  - trilha publicada numa escola → alunos activos dessa escola;
+  - enquete publicada numa escola → todos os membros activos;
+  - o criador nunca é notificado;
+  - republicar não duplica.
+
+### Segurança
+
+- **Isolamento:** uma notificação de outro utilizador, de outra escola ou do marketplace nunca aparece na lista nem na contagem, e não pode ser marcada como lida (404). A geração só alcança membros activos da organização onde o conteúdo foi publicado.
+
+### Dívida conhecida
+
+- A geração é síncrona: um INSERT em lote por publicação. Serve para o MVP; com escolas grandes, deve passar para uma fila.
+- Não há difusão no marketplace: publicar no marketplace não notifica ninguém (seria notificar todos os utilizadores).
+- Não há retenção nem limpeza automática das notificações antigas.
+- Sem SSE: o frontend faz polling ao `unread-count`.
+
+### Testes
+
+- 17 testes novos (`apps/notificacoes/tests.py`):
+  - isolamento por utilizador e contexto na lista, na contagem, no read e no read-all;
+  - forma do item e filtro de não lidas;
+  - throttle;
+  - geração só para membros activos da própria escola;
+  - idempotência e marketplace sem difusão;
+  - integração com o `publish` das trilhas e das enquetes.
+- **Contraprova:** sem o filtro de contexto, falham 7 testes; sem o filtro de utilizador, falham 6.
+
+### Corrigido
+
+- **Publicar uma trilha com enquetes em rascunho** passa a dar 400. Antes, os alunos viam um passo que não conseguiam abrir.
+
+### Testes (ambiente)
+
+- `core/settings_test.py` desliga o `SECURE_SSL_REDIRECT`. Com `DEBUG=False` (o default sem `.env`), o cliente de testes recebia 301 em todos os pedidos e a suite falhava.
+
+---
+
+## [Não Lançado] - Ciclo de vida das Enquetes (B2)
+
+### Adicionado
+
+- **`POST /api/enquetes/{id}/publish/`** (`rascunho` → `activa`) e **`POST /api/enquetes/{id}/close/`** (`activa` → `encerrada`, preenche `closedAt`). Só o criador; qualquer outra transição dá 409. Devolvem a vista do criador. O fecho automático ao atingir `sampleTarget` mantém-se.
+
+### Alterado
+
+- **`POST /api/enquetes/` passa a criar em `rascunho`** (antes ficava `activa`). É preciso publicar para que os alunos a vejam e votem.
+- Os valores de `state` mantêm-se (`rascunho`, `activa`, `encerrada`); mudam só os rótulos (Publicada, Fechada). Migração `enquetes/0002`: só muda o default para `rascunho`. As enquetes que já existem continuam `activa`, sem migração de dados.
+- A listagem mostra as enquetes publicadas **e as fechadas** (antes só as activas), mais os rascunhos do próprio criador.
+
+### Segurança
+
+- **Rascunho de enquete visível a outros membros:** o detalhe, o `shown`, o `dismiss` e os resultados procuravam a enquete só pelo workspace, sem olhar ao estado. Um membro do mesmo workspace conseguia abrir o rascunho de outro e registar exibições. Passam a dar 404 para rascunhos alheios.
+
+### Testes
+
+- 14 testes novos (`apps/enquetes/test_ciclo_de_vida.py`): transições e 409, só o criador, votar em rascunho ou em enquete fechada, visibilidade por papel, rascunho alheio → 404 (falha sem a correcção), e isolamento entre escolas e com o marketplace.
+
+---
+
+## [Não Lançado] - Autoria de Trilhas (B1)
+
+### Adicionado
+
+- **Criar e editar trilhas:** `POST /api/trilhas/` (teacher/admin na organização do `X-Workspace`, `creator` no marketplace; nasce rascunho) e `PATCH /api/trilhas/{id}/` (`title, headline, subject, year, semester, isSequential, finalExamId`). Só o criador altera a trilha: 403 se a vê, 404 se não a vê.
+- **`POST /api/trilhas/{id}/publish/`:** publica (exige pelo menos um passo; idempotente). `is_published` deixa de ser editável por outra via.
+- **`DELETE /api/trilhas/{id}/`:** 204, ou **409** se algum aluno já tem progresso (o histórico não se apaga, como no Content).
+- **Gestão de passos:** `POST /api/trilhas/{id}/items/` (acrescenta no fim), `PATCH`/`DELETE /api/trilhas/{id}/items/{itemId}/` (metadados; remover compacta a ordem, 409 com progresso) e `POST /api/trilhas/{id}/items/reorder/` (`{ itemIds }`, permutação completa; duas passagens por causa do unique não deferível).
+- **Arquivar:** `POST /api/trilhas/{id}/archive/` e `/unarchive/` (criador; idempotentes). Campo novo `Trilha.archived_at` (migração `trilhas/0002`, aditiva). Uma trilha arquivada sai da listagem e do detalhe para os alunos; o criador continua a vê-la e o progresso mantém-se.
+- `LearningTrailSerializer`: campos só de leitura `isSequential`, `isPublished` e `archivedAt` (aditivos).
+
+### Segurança
+
+- **Isolamento:** o alvo de um passo (conteúdo, quiz, enquete) e o exame final são procurados só no contexto da trilha (`for_context`). Um alvo de outra escola, do marketplace numa trilha escolar (ou o contrário) ou inexistente dá o mesmo 400 (`targetId`/`finalExamId`), sem revelar o que existe noutro contexto. Uma enquete em rascunho de outro autor também é recusada.
+
+### Testes
+
+- 36 testes novos (`apps/trilhas/test_autoria.py`): isolamento entre escolas e entre escola e marketplace (itens, exame, edição, apagar, arquivar, passos), permissões por papel e autoria, 409 com progresso, publicação, arquivo, reordenação e validações.
+
+---
+
+## [Não Lançado] - Auth institucional (6/6): gestão de membros
+
+### Adicionado
+
+- **`GET /api/tenancy/members/`:** membros da organização do `X-Workspace`, só para o admin dela, paginado, com filtros `role`, `is_active` e `search` (número de aluno ou nome). O email técnico nunca sai (`email: null`); o `first_name` usa o número de aluno como fallback.
+- **`POST /api/tenancy/members/<id>/deactivate/` e `/reactivate/`** (D13): só a pertença muda; a conta e o XP mantêm-se. Um admin não se desactiva a si próprio, e a organização nunca fica sem admin activo (`select_for_update`). Repetir a acção não muda nada nem duplica a auditoria.
+- **`POST /api/tenancy/members/<id>/reset-password/`** (D9): password temporária nova (`secrets`, 7 dias), `must_change_password` e `password_changed_at` gravados juntos (revoga as sessões). Mostrada uma vez, com `Cache-Control: no-store`. Throttle `provisioning`.
+- **`AuditoriaMembro`** (migração `tenancy/0005`, aditiva): regista o reset, a desactivação e a reactivação (organização, autor, pertença, acção, data). Só leitura no admin.
+
+### Segurança
+
+- **O reset só vale para contas geridas só por esta organização:** contas provisionadas por ela e sem pertença a outra organização. A password é da conta, por isso o admin de uma escola não pode tomar uma conta que também pertence a outra escola ou ao marketplace. O admin também não faz reset a si próprio (400; usa a troca de password).
+- Uma pertença de outra organização dá 404 pelo próprio workspace (não revela que existe) e 403 pelo workspace alheio.
+
+### Testes
+
+- 13 testes novos (`apps/tenancy/test_gestao.py`). Isolamento:
+  - listagem só da própria escola;
+  - acções sobre um membro de outra escola → 404 e 403, sem auditoria;
+  - professor e não-membro → 403.
+- Também: auditoria, idempotência, perda de acesso ao workspace, auto-desactivação, último admin, e reset com revogação das sessões e login com a nova password.
+- Contas não geridas só pela escola → 403. Este teste falha sem a regra.
+
+---
+
+## [Não Lançado] - `X-Workspace` no schema da API
+
+### Adicionado
+
+- **O header `X-Workspace` passa a estar documentado no OpenAPI/Swagger** em todas as operações com scoping por workspace (25: conteúdos, quizzes, ranking, dashboards, trilhas, enquetes, organizações), com a descrição do valor (UUID da organização ou `marketplace`) e dos erros (400, 403, 404). Os endpoints de autenticação não o têm. Implementado com `apps.tenancy.schema.WorkspaceAutoSchema` (`DEFAULT_SCHEMA_CLASS`), que acrescenta o parâmetro às views com `WorkspaceScopedMixin`. O resto do schema e os avisos do drf-spectacular não mudam.
+- README: secção sobre o `X-Workspace`.
+
+### Testes
+
+- Header presente em seis endpoints com scoping e ausente no login e no registo.
+
+---
+
+## [Não Lançado] - Auth institucional (5/6): provisionamento em lote
+
+### Adicionado
+
+- **`POST /api/tenancy/members/bulk/`** (D3 = P2, D4): o admin da organização do `X-Workspace` activo cria contas em lote: `{ dry_run, rows: [{ student_code, first_name, last_name, role, academic_year, faculty, course, email }] }`.
+  - **Tudo ou nada:** se alguma linha falhar, nada é criado e a resposta `400 { errors: [{ row, student_code, errors }] }` traz o detalhe. Com `dry_run`, só valida (`200`).
+  - Cada conta nasce na mesma transacção com a `Membership` (papel e dados académicos, `provisioned_by`/`provisioned_at`) e a auditoria em `ProvisionamentoLote`.
+  - **Password temporária** (D5): gerada com `secrets`, 10 caracteres sem ambíguos, válida 7 dias, troca obrigatória no 1.º acesso. Só aparece nesta resposta (com `Cache-Control: no-store`); não é gravada em claro nem registada em logs. `password` e `password_changed_at` são gravados juntos.
+  - O `student_code` é normalizado antes de qualquer validação ou escrita, e só aceita letras, números, `-`, `_`, `/` e `.`, porque também forma o email técnico `<aluno>@<escola>.kombinu.invalid`.
+  - Recusa números repetidos no lote ou já existentes na organização, emails já registados (D12), o domínio técnico e emails repetidos.
+  - O nome de exibição é o número de aluno quando a escola não manda nome.
+- **Limite do lote configurável:** `PROVISIONING_MAX_ROWS` (20 por omissão; ver `.env.example`). Cada conta custa um hash PBKDF2 (cerca de 5,4 s medidos na máquina de desenvolvimento) e o lote tem de caber no timeout do worker. O valor final (D4 previa 100) depende de um benchmark no servidor. Throttle `provisioning`: 30/hora por utilizador (provisório).
+- **`manage.py criar_admin_organizacao <slug|código> --email …`:** cria o 1.º admin de uma organização (D3, bootstrap), com password temporária mostrada uma vez na saída do comando.
+
+### Testes
+
+- 17 testes novos (`apps/tenancy/test_provisionamento.py`). Isolamento:
+  - o admin da escola A com `X-Workspace` da escola B → 403;
+  - marketplace → 403;
+  - professor, aluno e admin inactivo → 403;
+  - cada admin só cria na sua escola.
+- Também: lote atómico, erros por linha, `dry_run`, limite do lote, login institucional da conta criada, email real opcional, passwords fora dos logs e o comando do 1.º admin.
+
+---
+
+## [Não Lançado] - Auth institucional (4/6): login, troca obrigatória e troca de password
+
+### Adicionado
+
+- **`POST /api/auth/institutional/login/`** (D1, D10): `{ school_code, student_code, password }`. `school_code` é o `Organizacao.code` de 6 caracteres, não o UUID. Devolve o mesmo envelope do login por email. Qualquer falha (escola inexistente ou inactiva, aluno inexistente, password errada, conta inactiva, password temporária expirada) devolve o mesmo `401 { "error": "Invalid credentials." }`, e o hash corre mesmo quando a conta não existe (S2). Throttling: 30/min por IP e 5/min por par (escola, aluno).
+- **`POST /api/auth/password/change/`** (D6): `{ current_password, new_password }` → `{ access_token, refresh_token }` novos. Grava `password` e `password_changed_at` juntos, o que revoga as sessões anteriores (D7), e desliga `must_change_password`. Erros 400 nas mesmas chaves. Limite: 10/hora por utilizador (provisório).
+- **Gate de troca obrigatória** (D6): com `must_change_password`, qualquer endpoint autenticado devolve `403 { "detail", "code": "password_change_required" }`, excepto a troca de password e o refresh.
+- **`user` nos dois logins:** `must_change_password` e `memberships: [{ organizacao_id, name, code, role }]` (só activas, em organizações activas; D13).
+
+### Alterado
+
+- **`user.email` é `null` nas contas institucionais** (email técnico `*.kombinu.invalid`), e o email técnico nunca sai da API. **`first_name` e `nome`** usam o `student_code` como fallback nessas contas.
+
+### Segurança
+
+- **As contas institucionais só entram pelo login institucional:** `POST /api/auth/login/` recusa emails técnicos (`*.kombinu.invalid`, que são previsíveis) com o mesmo `401 Invalid credentials.`. Sem isto, a password temporária expirada continuava a dar acesso pelo login por email, e o throttling por conta tinha orçamento duplicado.
+- **Expiração da password temporária numa regra única** (`temp_password_expired`), aplicada aos dois logins.
+- **O registo aberto recusa o domínio técnico:** `POST /api/auth/register/` com um email `*.kombinu.invalid` → `400`. Impede que alguém ocupe antecipadamente o email técnico de um aluno e bloqueie o seu provisionamento.
+
+### Corrigido
+
+- **Login e registo com um token antigo no header:** `POST /api/auth/login/` e `POST /api/auth/register/` devolviam `401 token_not_valid` quando o pedido trazia um Bearer expirado ou inválido, mesmo com credenciais certas. Passam a ignorar o header `Authorization` (`authentication_classes = []`). O refresh já não autenticava.
+
+### Testes
+
+- 20 testes novos (`apps/accounts/test_institutional.py`). Isolamento:
+  - o mesmo `student_code` em duas escolas resolve pela escola;
+  - o código de uma escola não autentica alunos de outra;
+  - `memberships` só mostra a própria escola.
+- Também: todas as falhas com o mesmo 401, o UUID recusado como código, escola, conta ou password temporária inactivas ou expiradas, aluno que saiu, nome de exibição, Bearer antigo no login, gate em vários endpoints, refresh permitido durante a troca pendente, troca com revogação e validações.
+
+---
+
+## [Não Lançado] - Auth institucional (2/6, complemento): rotação do refresh
+
+### Alterado
+
+- **Rotação do refresh token (D7):** `POST /api/auth/token/refresh/` passa de `{ "access" }` a `{ "access", "refresh" }` (`ROTATE_REFRESH_TOKENS = True`). **Breaking** para clientes que ignoravam a resposta; o frontend já guarda o refresh novo (contrato que aprovei).
+- Sem blacklist: o refresh anterior continua válido até expirar (1 dia), salvo se a password for trocada depois de ele ser emitido (`password_changed_at`). A blacklist acrescentaria uma app e tabelas, e fica para quando for precisa a revogação remota.
+
+### Testes
+
+- Resposta `{access, refresh}` com tokens utilizáveis; refresh antigo ainda válido sem blacklist; refresh rodado revogado por troca de password.
+
+---
+
+## [Não Lançado] - Autenticação Bearer no Swagger
+
+### Corrigido
+
+- **`/api/docs/` não mostrava autenticação:** `SPECTACULAR_SETTINGS["AUTHENTICATION_WHITELIST"]` só tinha `TokenAuthentication`, que a API não usa. Passa a ter a autenticação JWT da API. O schema ganha o esquema `jwtAuth` (`http`, `bearer`, `JWT`), e o Swagger passa a mostrar o botão "Authorize" e o cadeado nos endpoints protegidos.
+- Extensão de schema para `PasswordAwareJWTAuthentication` (`apps/accounts/schema.py`): a do drf-spectacular só reconhece a classe original do simplejwt.
+- `POST /api/auth/login/` e `POST /api/auth/register/` passam de `permission_classes = []` a `[AllowAny]`. O comportamento é o mesmo; no schema ficam marcados como públicos (autenticação opcional) em vez de exigirem JWT.
+
+---
+
+## [Não Lançado] - Auth institucional (2/6): revogação de sessões
+
+### Segurança
+
+- **Trocar a password invalida as sessões anteriores (D7):** um access ou refresh token emitido antes de `CustomUser.password_changed_at` passa a ser recusado com `401` e `code: "token_not_valid"` (o formato padrão do simplejwt), em qualquer endpoint autenticado e em `POST /api/auth/token/refresh/`. Sem tabelas novas nem blacklist.
+- `password_changed_at` é actualizado por `set_password` em contas já existentes (troca pela API, pelo admin ou por reset). A criação da conta não conta como troca, e o rehash automático do hasher no login grava só o campo `password`, por isso não revoga sessões.
+- A comparação é feita ao segundo (resolução do `iat`): os tokens emitidos no mesmo segundo da troca continuam válidos.
+
+### Alterado
+
+- Autenticação por omissão: `apps.accounts.authentication.PasswordAwareJWTAuthentication` (subclasse do `JWTAuthentication` do simplejwt).
+- A rotação do refresh token (também D7) fica para depois de o contrato com o frontend fechar.
+
+### Testes
+
+- Tokens sem troca de password, access e refresh anteriores à troca (`401 token_not_valid`), tokens no mesmo segundo, novo login depois da troca, `set_password` só em contas existentes e rehash sem revogação.
+
+---
+
+## [Não Lançado] - Auth institucional (3/6): papel de criador
+
+### Alterado
+
+- **`IsCreator` e criação de quizzes usam o papel no workspace activo (D11):** no marketplace continua a ser preciso `user_type="creator"`; numa organização conta o papel `teacher` ou `admin` na `Membership`, seja qual for o `user_type`. Afecta `POST /api/contents/`, `POST /api/quizzes/contents/<id>/generate-quiz/` e `POST /api/quizzes/contents/<id>/manual-quiz/`.
+
+### Corrigido
+
+- Um professor (`teacher`) com `user_type="learner"` levava 403 ao criar conteúdo ou quiz na própria escola.
+- Um utilizador `creator` despromovido a `student` numa escola continuava a poder criar quizzes sobre o seu conteúdo dessa escola.
+
+### Testes
+
+- Isolamento: professor `learner` cria na sua escola, mas não noutra escola nem no marketplace; criador despromovido não cria quiz (manual nem gerado); no marketplace mantém-se a exigência de `creator`.
+
+---
+
+## [Não Lançado] - Auth institucional (1/6): modelos
+
+### Adicionado
+
+- **`Organizacao.code`:** código curto da escola para o login institucional (D2), com 6 caracteres de um alfabeto sem ambíguos (sem `0/O`, `1/I`), único e gerado automaticamente. As organizações existentes recebem código numa migração de dados (`tenancy/0003`), entre a criação do campo nulável (`0002`) e a passagem a obrigatório e único (`0004`).
+- **`Membership.student_code`:** número de aluno atribuído pela escola, normalizado (maiúsculas, sem espaços) e único por organização. O mesmo número noutra escola é outra pessoa. `provisioned_by` e `provisioned_at` para auditoria.
+- **`CustomUser`:** `must_change_password`, `password_changed_at` e `temp_password_expires_at` (D5–D7), desligados por omissão.
+- **`ProvisionamentoLote`:** registo de cada lote de contas criado por um admin (organização, autor, data, nº de contas). `PROTECT` sobre a organização; só leitura no admin.
+
+Sem endpoints nem mudanças de contrato nesta etapa (ver `docs/relatorio-auth-institucional.md` §7.2).
+
+---
+
+## [Não Lançado] - Suite de testes rápida e teste instável
+
+### Alterado
+
+- **Hasher rápido só nos testes:** novo `core/settings_test.py`, que herda de `core/settings.py` e só troca `PASSWORD_HASHERS` por MD5; o `pytest.ini` passa a usá-lo. `manage.py`, WSGI e ASGI continuam em `core.settings`, por isso produção mantém o PBKDF2. Suite completa (167 testes, mesma máquina e mesmo venv): **47m00s → 1m40s** no tempo do pytest.
+
+### Corrigido
+
+- **Teste instável `test_other_school_users_never_leak_into_response`:** procurava `"99"` na resposta inteira e falhava em cerca de 11% das execuções, quando o UUID aleatório do workspace continha `99`. Passa a comparar `user_id`, `total_score`, `user_position` e `count`.
+
+---
+
+## [Não Lançado] - Django 5.2 LTS
+
+### Alterado
+
+- **Django 4.2 → 5.2 LTS** em `requirements.txt` (`Django>=5.2,<5.3`). O 4.2 está fora de suporte desde Abril de 2026; o 5.2 tem suporte até Abril de 2028. As outras dependências ficam alinhadas com o ambiente onde a suite já passava: DRF ≥3.16, simplejwt ≥5.5, django-cors-headers ≥4.9, drf-spectacular ≥0.28, django-filter 25.x, whitenoise ≥6.11, psycopg2-binary ≥2.9.10 (rodas para Python 3.13), dj-database-url ≥2.3, pytest 9, pytest-django ≥4.11, black 25.
+- **gunicorn 21 → 23** (o 21 tem a vulnerabilidade de *request smuggling* CVE-2024-1135, corrigida no 22).
+- **Python 3.13 fixado** em `.python-version`, que o Render lê no build.
+- **`STATICFILES_STORAGE` → `STORAGES`:** o setting antigo deixou de existir no Django 5.1 e seria ignorado em silêncio, e o whitenoise perdia a compressão e o manifest. O comportamento em produção mantém-se.
+- `TrilhaItem`: `CheckConstraint(check=…)` → `condition=…` (o `check` sai no Django 6.0). Sem migração nova.
+
+### Corrigido
+
+- **`develop` não fazia deploy no Render:** a migração `trilhas/0001_initial` usa `CheckConstraint(condition=…)`, que não existe no Django 4.2, e o `migrate` do `build.sh` falhava com `TypeError`.
+
+---
+
+## [Não Lançado] - Organização do conteúdo só de leitura
+
+### Segurança
+
+- **Fuga entre tenants em `PUT`/`PATCH /api/contents/<id>/`:** o campo `organizacao` era editável, e o criador podia mover o seu conteúdo para uma organização onde não tem `Membership` (ou para o marketplace). Passa a ser só de leitura: vem sempre do workspace activo na criação e é ignorado no corpo de `POST`, `PUT` e `PATCH`. No schema da API passa a `readOnly` na resposta e sai de `ContentRequest`/`PatchedContentRequest`.
+- Revisto o mesmo risco em Quiz, Trilha e Enquete: não há endpoints de edição, os serializers não expõem `organizacao` para escrita e a criação usa sempre o workspace activo.
+
+### Testes
+
+- Isolamento: criar com `organizacao` de outra escola no corpo, mover por `PATCH` (outra escola e `null`) e por `PUT`. O conteúdo fica na escola de origem e não aparece na outra escola nem no marketplace.
+
+---
+
+## [Não Lançado] - Ranking por workspace (R4)
+
+### Alterado
+
+- **Ranking (`GET /api/rankings/global/`):** passa a ler o ledger `XPEvent` em vez de `QuizSubmission.score` e a respeitar o header `X-Workspace`. O ranking escolar já não soma o XP do marketplace nem de outra organização; cada contexto tem a sua tabela.
+- **Cálculo na base de dados:** posição por `RANK()` (empates partilham posição) e posição do utilizador por agregação com `HAVING`, em vez de carregar todos os utilizadores em Python.
+- **Paginação:** `?page=` e `?page_size=` (máx. 100, por omissão 100). A resposta mantém `top_users` e `user_position` e acrescenta `count`, `page`, `page_size`, `total_pages` e `workspace`.
+- **Dashboards (`LearnerStats`, `LearnerCourses`, `CreatorStats`):** respeitam o workspace activo. `totalPoints` é o XP do workspace; `currentLevel` e os `pontos`/`nivel` do perfil vêm da carteira global (XPEvent de todos os contextos).
+- **XP de enquetes** passa a contar no ranking e nos pontos, por viver no mesmo ledger.
+
+### Corrigido
+
+- O ranking e os dashboards ignoravam o workspace activo e podiam misturar XP e dados de organizações diferentes (R4/R7).
+
+### Testes
+
+- Isolamento de ranking e dashboards entre duas escolas fictícias e o marketplace, empates, paginação, limite de queries e fonte do XP.
+
+---
+
+## [Não Lançado] - Fase de Expansão B2B/B2C — Fundação multi-tenant
+
+### Adicionado
+
+- **App `tenancy`:** modelos `Organizacao` e `Membership` (papéis `student`/`teacher`/`admin`, ano/faculdade/curso em texto livre). Isolamento **lógico** por FK `organizacao` — `NULL` = marketplace (decisão D1; SLA §9.2 revisto).
+- **FK `organizacao` nullable** em `Content`, `Quiz` e `QuizSubmission`. Dados existentes ficam no marketplace sem data migration.
+- **Scoping central por workspace:** `OrganizacaoQuerySet.for_context()` e `WorkspaceScopedMixin`. O contexto activo vem do header `X-Workspace` (UUID da organização; ausente ou `marketplace` = B2C) e a pertença é validada contra `Membership` em cada pedido. Objectos de outro contexto devolvem 404.
+- **`XPEvent` (app `rankings`):** ledger único de XP, idempotente por `(source_type, source_id)`, com backfill a partir das submissões existentes.
+- **`QuizSubmission`:** `attempt`, `correct_count`, `total_questions` e `xp_awarded`. Backfill aproximado (`correct_count = score // 10`; `total_questions` = nº actual de perguntas).
+- **Testes de isolamento** entre duas organizações fictícias e o marketplace (SLA §8.3).
+- **Enquetes (`apps.enquetes`):** modelos `Enquete`, `EnqueteOpcao`, `EnqueteVoto` e `EnqueteExibicao`. Endpoints em `/api/enquetes/`: criar (forma `SurveyDraft`), listar/detalhe, votar (`optionId`), marcar vista/dispensada e resultados agregados (forma `SurveyResult`, percentagens 0–100). Voto único por utilizador (409 na repetição), XP simbólico de 5 por voto via `XPEvent`, fecho automático ao atingir `sampleTarget`. A API nunca expõe a identidade do votante e a vista do votante omite `decision`.
+- **Trilhas (`apps.trilhas`):** modelos `Trilha`, `TrilhaItem` (conteúdo/quiz/enquete, com `CheckConstraint` de alvo único) e `TrilhaProgresso`. `GET /api/trilhas/` e `/api/trilhas/<id>/` na forma `LearningTrail` com `status` (`concluido`/`ativo`/`bloqueado`) e `stars` calculados por utilizador. Itens de quiz e enquete concluem-se ao submeter/votar; itens de conteúdo via `POST /api/trilhas/items/<id>/complete/`. Sem `TrilhaMista` e sem campos de `AdaptiveTrail` (D4/D5).
+
+### Alterado
+
+- **Tentativas múltiplas de quiz (D12):** `unique_together(user, quiz)` substituído por `UniqueConstraint(user, quiz, attempt)`. O XP só é concedido na primeira tentativa; `score` mantém-se como espelho de `xp_awarded`. A repetição deixa de devolver 400.
+- **Histórico protegido (R5):** `Content.creator` e `QuizSubmission.quiz` passam de `CASCADE` a `PROTECT`. `DELETE` de conteúdo com submissões devolve 409.
+- **Ranking global:** `top_users` devolve `name` (nome de exibição, ou `Utilizador <id>`) em vez de `email`. **Breaking change** para consumidores que liam `email`.
+
+### Corrigido
+
+- **Fugas de acesso (R7):** só o criador pode fazer `update`/`partial_update`/`destroy` de um `Content`; geração e criação manual de quiz exigem que o conteúdo pertença ao utilizador; criar conteúdo numa organização exige papel `teacher` ou `admin`.
+- **Submissão com opção inválida** deixava a submissão criada com score 0 (a transacção fazia commit ao devolver 400). Passa a fazer rollback, para não consumir a tentativa nem o XP.
+
+### Dívida conhecida
+
+- Enquetes: sem endpoints para publicar/encerrar manualmente (só fecham por `sampleTarget`); `segmentSize` guardado mas sem uso (semântica por confirmar); o gatilho (`trigger`) é só um tipo, sem alvo concreto (D11); **D9 (anonimato) pendente de validação legal**.
+- Trilhas: sem endpoints de criação/edição (só admin); limiares de estrelas (50/75/90%) e XP por voto (5) são sugestões por confirmar; minutos do exame final fixos em 15 (como `timeLimit` do quiz); reordenar itens exige duas passagens (unique não deferível em SQLite).
+
+---
+
 ## [2.7.2] - Login com token antigo no header (Não Lançado)
 
 ### Corrigido

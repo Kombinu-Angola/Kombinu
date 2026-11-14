@@ -14,18 +14,15 @@ class QuizModelTest(TestCase):
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         self.content = Content.objects.create(
             title="Test Content",
             description="Test description",
             creator=self.creator,
-            category="tecnologia"
+            category="tecnologia",
         )
-        self.quiz = Quiz.objects.create(
-            title="Test Quiz",
-            content=self.content
-        )
+        self.quiz = Quiz.objects.create(title="Test Quiz", content=self.content)
 
     def test_quiz_creation(self):
         """Testa se o quiz foi criado corretamente"""
@@ -40,10 +37,10 @@ class QuizModelTest(TestCase):
     def test_one_to_one_relationship(self):
         """Testa que um conteúdo pode ter apenas um quiz"""
         from django.db import IntegrityError
+
         with self.assertRaises(IntegrityError):
             Quiz.objects.create(
-                title="Another Quiz",
-                content=self.content  # Mesmo conteúdo
+                title="Another Quiz", content=self.content  # Mesmo conteúdo
             )
 
 
@@ -53,28 +50,23 @@ class QuestionAndOptionModelTest(TestCase):
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         content = Content.objects.create(
             title="Test Content",
             description="Test description",
             creator=creator,
-            category="tecnologia"
+            category="tecnologia",
         )
         self.quiz = Quiz.objects.create(title="Test Quiz", content=content)
         self.question = Question.objects.create(
-            quiz=self.quiz,
-            question_text="What is 2+2?"
+            quiz=self.quiz, question_text="What is 2+2?"
         )
         self.correct_option = Option.objects.create(
-            question=self.question,
-            text="4",
-            is_correct=True
+            question=self.question, text="4", is_correct=True
         )
         self.wrong_option = Option.objects.create(
-            question=self.question,
-            text="5",
-            is_correct=False
+            question=self.question, text="5", is_correct=False
         )
 
     def test_question_creation(self):
@@ -102,25 +94,23 @@ class QuizSubmissionModelTest(TestCase):
             username="learner@example.com",
             email="learner@example.com",
             password="learnerpass123",
-            user_type="learner"
+            user_type="learner",
         )
         creator = CustomUser.objects.create_user(
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         content = Content.objects.create(
             title="Test Content",
             description="Test description",
             creator=creator,
-            category="tecnologia"
+            category="tecnologia",
         )
         self.quiz = Quiz.objects.create(title="Test Quiz", content=content)
         self.submission = QuizSubmission.objects.create(
-            user=self.learner,
-            quiz=self.quiz,
-            score=8
+            user=self.learner, quiz=self.quiz, score=8
         )
 
     def test_submission_creation(self):
@@ -132,12 +122,9 @@ class QuizSubmissionModelTest(TestCase):
     def test_unique_submission_constraint(self):
         """Testa se não é possível criar submissões duplicadas"""
         from django.db import IntegrityError
+
         with self.assertRaises(IntegrityError):
-            QuizSubmission.objects.create(
-                user=self.learner,
-                quiz=self.quiz,
-                score=5
-            )
+            QuizSubmission.objects.create(user=self.learner, quiz=self.quiz, score=5)
 
     def test_submission_str_representation(self):
         """Testa a representação string da submissão"""
@@ -151,39 +138,32 @@ class QuizAnswerModelTest(TestCase):
             username="learner@example.com",
             email="learner@example.com",
             password="learnerpass123",
-            user_type="learner"
+            user_type="learner",
         )
         creator = CustomUser.objects.create_user(
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         content = Content.objects.create(
             title="Test Content",
             description="Test description",
             creator=creator,
-            category="tecnologia"
+            category="tecnologia",
         )
         quiz = Quiz.objects.create(title="Test Quiz", content=content)
-        self.question = Question.objects.create(
-            quiz=quiz,
-            question_text="What is 2+2?"
-        )
+        self.question = Question.objects.create(quiz=quiz, question_text="What is 2+2?")
         self.option = Option.objects.create(
-            question=self.question,
-            text="4",
-            is_correct=True
+            question=self.question, text="4", is_correct=True
         )
         self.submission = QuizSubmission.objects.create(
-            user=learner,
-            quiz=quiz,
-            score=1
+            user=learner, quiz=quiz, score=1
         )
         self.answer = QuizAnswer.objects.create(
             submission=self.submission,
             question=self.question,
-            selected_option=self.option
+            selected_option=self.option,
         )
 
     def test_answer_creation(self):
@@ -203,36 +183,35 @@ class QuizAPITest(APITestCase):
             username="creator@example.com",
             email="creator@example.com",
             password="creatorpass123",
-            user_type="creator"
+            user_type="creator",
         )
         self.learner = CustomUser.objects.create_user(
             username="learner@example.com",
             email="learner@example.com",
             password="learnerpass123",
-            user_type="learner"
+            user_type="learner",
         )
         self.content = Content.objects.create(
             title="Content for Quiz",
             description="Description",
             creator=self.creator,
-            category="tecnologia"
+            category="tecnologia",
         )
-        self.generate_url = reverse("quiz-generate", kwargs={"content_id": self.content.id})
+        self.generate_url = reverse(
+            "quiz-generate", kwargs={"content_id": self.content.id}
+        )
 
     @patch("apps.quizzes.views.generate_quiz_from_opentdb")
     def test_generate_quiz_success(self, mock_generate):
         """Testa gerar quiz com sucesso (mockando serviço externo)"""
         self.client.force_authenticate(user=self.creator)
-        
+
         # Mock return value
         mock_quiz = MagicMock()
         mock_quiz.pk = "12345678-1234-5678-1234-567812345678"
         mock_generate.return_value = mock_quiz
-        
-        data = {
-            "difficulty": "easy",
-            "number_of_questions": 5
-        }
+
+        data = {"difficulty": "easy", "number_of_questions": 5}
         response = self.client.post(self.generate_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("quiz_id", response.data)
@@ -241,6 +220,7 @@ class QuizAPITest(APITestCase):
     def test_generate_quiz_rate_limit_returns_503(self, mock_generate):
         """Testa que rate limit da OpenTDB retorna 503 com mensagem específica"""
         from apps.quizzes.services import OpenTDBRateLimitError
+
         mock_generate.side_effect = OpenTDBRateLimitError("rate limit")
         self.client.force_authenticate(user=self.creator)
         response = self.client.post(self.generate_url, {"difficulty": "easy"})
@@ -259,7 +239,10 @@ class QuizAPITest(APITestCase):
         mock_call.side_effect = [None, [en_question]]
 
         from apps.quizzes.services import generate_quiz_from_opentdb
-        quiz = generate_quiz_from_opentdb(self.content, difficulty="easy", num_questions=1)
+
+        quiz = generate_quiz_from_opentdb(
+            self.content, difficulty="easy", num_questions=1
+        )
 
         self.assertIsNotNone(quiz)
         self.assertEqual(mock_call.call_count, 2)
@@ -284,19 +267,16 @@ class QuizAPITest(APITestCase):
         question = Question.objects.create(quiz=quiz, question_text="Q1")
         option1 = Option.objects.create(question=question, text="A", is_correct=True)
         option2 = Option.objects.create(question=question, text="B", is_correct=False)
-        
+
         submit_url = reverse("quiz-submit", kwargs={"quiz_id": quiz.id})
         self.client.force_authenticate(user=self.learner)
-        
+
         data = {
             "answers": [
-                {
-                    "question_id": str(question.id),
-                    "selected_option_id": str(option1.id)
-                }
+                {"question_id": str(question.id), "selected_option_id": str(option1.id)}
             ]
         }
-        response = self.client.post(submit_url, data, format='json')
+        response = self.client.post(submit_url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # score agora é XP = respostas correctas × 10
         self.assertEqual(response.data["score"], 10)
@@ -312,25 +292,29 @@ class QuizAPITest(APITestCase):
             title="Other Content",
             description="Other description",
             creator=self.creator,
-            category="design"
+            category="design",
         )
         other_quiz = Quiz.objects.create(title="Other Quiz", content=other_content)
-        
-        other_question = Question.objects.create(quiz=other_quiz, question_text="Other Q")
-        other_option = Option.objects.create(question=other_question, text="Opt", is_correct=True)
-        
+
+        other_question = Question.objects.create(
+            quiz=other_quiz, question_text="Other Q"
+        )
+        other_option = Option.objects.create(
+            question=other_question, text="Opt", is_correct=True
+        )
+
         submit_url = reverse("quiz-submit", kwargs={"quiz_id": quiz.id})
         self.client.force_authenticate(user=self.learner)
-        
+
         data = {
             "answers": [
                 {
                     "question_id": str(other_question.id),
-                    "selected_option_id": str(other_option.id)
+                    "selected_option_id": str(other_option.id),
                 }
             ]
         }
-        response = self.client.post(submit_url, data, format='json')
+        response = self.client.post(submit_url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_submit_quiz_duplicate_question_is_rejected(self):
@@ -354,4 +338,103 @@ class QuizAPITest(APITestCase):
         }
         response = self.client.post(submit_url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(QuizSubmission.objects.filter(user=self.learner, quiz=quiz).exists())
+        self.assertFalse(
+            QuizSubmission.objects.filter(user=self.learner, quiz=quiz).exists()
+        )
+
+
+class QuizAttemptsTest(APITestCase):
+    """D12: tentativas múltiplas; XP só na primeira."""
+
+    def setUp(self):
+        self.creator = CustomUser.objects.create_user(
+            username="att-creator@test.com",
+            email="att-creator@test.com",
+            password="pass12345",
+            user_type="creator",
+        )
+        self.learner = CustomUser.objects.create_user(
+            username="att-learner@test.com",
+            email="att-learner@test.com",
+            password="pass12345",
+            user_type="learner",
+        )
+        content = Content.objects.create(
+            title="C", description="d", creator=self.creator, category="tecnologia"
+        )
+        self.quiz = Quiz.objects.create(title="Q", content=content)
+        self.q1 = Question.objects.create(quiz=self.quiz, question_text="a?")
+        self.q2 = Question.objects.create(quiz=self.quiz, question_text="b?")
+        self.q1_ok = Option.objects.create(question=self.q1, text="ok", is_correct=True)
+        self.q1_ko = Option.objects.create(
+            question=self.q1, text="ko", is_correct=False
+        )
+        self.q2_ok = Option.objects.create(question=self.q2, text="ok", is_correct=True)
+        self.q2_ko = Option.objects.create(
+            question=self.q2, text="ko", is_correct=False
+        )
+        self.url = reverse("quiz-submit", args=[self.quiz.id])
+        self.client.force_authenticate(self.learner)
+
+    def _payload(self, o1, o2):
+        return {
+            "answers": [
+                {"question_id": str(self.q1.id), "selected_option_id": str(o1.id)},
+                {"question_id": str(self.q2.id), "selected_option_id": str(o2.id)},
+            ]
+        }
+
+    def test_first_attempt_awards_xp_and_stores_counts(self):
+        r = self.client.post(
+            self.url, self._payload(self.q1_ok, self.q2_ko), format="json"
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        s = QuizSubmission.objects.get(user=self.learner, quiz=self.quiz)
+        self.assertEqual((s.attempt, s.correct_count, s.total_questions), (1, 1, 2))
+        self.assertEqual((s.xp_awarded, s.score), (10, 10))
+
+    def test_second_attempt_allowed_without_xp(self):
+        self.client.post(self.url, self._payload(self.q1_ok, self.q2_ok), format="json")
+        r = self.client.post(
+            self.url, self._payload(self.q1_ok, self.q2_ok), format="json"
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data["xp earned"], 0)
+        second = QuizSubmission.objects.get(
+            user=self.learner, quiz=self.quiz, attempt=2
+        )
+        self.assertEqual(
+            (second.correct_count, second.xp_awarded, second.score), (2, 0, 0)
+        )
+        total = sum(
+            QuizSubmission.objects.filter(user=self.learner).values_list(
+                "score", flat=True
+            )
+        )
+        self.assertEqual(total, 20)
+
+    def test_invalid_option_does_not_consume_attempt(self):
+        other_q = Question.objects.create(quiz=self.quiz, question_text="c?")
+        payload = {
+            "answers": [
+                {
+                    "question_id": str(other_q.id),
+                    "selected_option_id": str(self.q1_ok.id),
+                },
+            ]
+        }
+        r = self.client.post(self.url, payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(QuizSubmission.objects.filter(user=self.learner).exists())
+        # tentativa seguinte válida ainda conta como a 1.ª e dá XP
+        ok = {
+            "answers": [
+                {
+                    "question_id": str(self.q1.id),
+                    "selected_option_id": str(self.q1_ok.id),
+                },
+            ]
+        }
+        r = self.client.post(self.url, ok, format="json")
+        self.assertEqual(r.data["xp earned"], 10)
+        self.assertEqual(QuizSubmission.objects.get(user=self.learner).attempt, 1)
