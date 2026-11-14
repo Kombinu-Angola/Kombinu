@@ -19,7 +19,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Segurança
 
-- **Passwords:** nenhuma está fixa no código. São geradas com `secrets` e mostradas uma única vez no terminal, ou vêm de `SEED_DEMO_PASSWORD` (mínimo de 12 caracteres, nunca impressa).
+- **Passwords:** nenhuma está fixa no código. A prioridade é `--set-password` > `SEED_DEMO_PASSWORD` (mínimo de 12 caracteres) > gerada com `secrets`. As geradas são mostradas uma única vez no terminal; uma password escolhida nunca é impressa.
+- **`--set-password`:** usa uma password escolhida em todas as contas demo, incluindo as que já existem, para as repor antes de uma demonstração. Contas fora de `@demo.kombinu.com` não são tocadas.
+  - Sem valor, pede a password duas vezes com `getpass` (sem eco), para não ficar no histórico do terminal nem na lista de processos.
+  - Com `--set-password=<valor>`, avisa que a password fica no histórico da shell.
+  - Passa pelos validadores do Django (`validate_password`); se falhar, pára sem criar nem alterar nada.
 - **Produção:** com `DEBUG=False`, o comando recusa correr sem `--confirmar-producao`.
 - **`--limpar`:** remove só os dados de demonstração, pela ordem dos `PROTECT`. Se encontrar dados reais ligados aos de demonstração, recusa e não apaga nada.
 

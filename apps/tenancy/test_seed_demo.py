@@ -46,6 +46,12 @@ def seed(**options):
     return out.getvalue()
 
 
+def seed_args(*args, **options):
+    out = StringIO()
+    call_command("seed_demo", *args, stdout=out, **options)
+    return out.getvalue()
+
+
 def counts():
     return {m.__name__: m.objects.count() for m in MODELS}
 
@@ -160,6 +166,56 @@ class SeededTests(TestCase):
         line = next(l for l in output.splitlines() if user.email in l)
         self.assertTrue(user.check_password(line.split()[-1]))
 
+    # ---------------------------------------------------------- --set-password
+    def test_set_password_value_applies_to_existing_demo_accounts(self):
+        chosen = "Reuniao-Kombinu-2026"
+        real_hashes = dict(
+            CustomUser.objects.exclude(email__endswith=DOMAIN).values_list(
+                "pk", "password"
+            )
+        )
+        err = StringIO()
+        output = seed(set_password=chosen, stderr=err)
+        self.assertIn("histórico", err.getvalue())
+        self.assertNotIn(chosen, output)
+        for user in demo_users():
+            self.assertTrue(user.check_password(chosen), user.email)
+            self.assertFalse(user.must_change_password)
+        # Só as contas demo mudam.
+        self.assertEqual(
+            dict(
+                CustomUser.objects.exclude(email__endswith=DOMAIN).values_list(
+                    "pk", "password"
+                )
+            ),
+            real_hashes,
+        )
+        self.assertTrue(self.student.check_password("x"))
+
+    def test_set_password_prompt_asks_twice_without_echo(self):
+        chosen = "Reuniao-Kombinu-2026"
+        with mock.patch("getpass.getpass", side_effect=[chosen, chosen]) as ask:
+            err = StringIO()
+            output = seed_args("--set-password", stderr=err)
+        self.assertEqual(ask.call_count, 2)
+        self.assertEqual(err.getvalue(), "")
+        self.assertNotIn(chosen, output)
+        self.assertTrue(demo_users().first().check_password(chosen))
+
+    def test_set_password_beats_environment(self):
+        chosen = "Reuniao-Kombinu-2026"
+        with mock.patch.dict(
+            os.environ, {"SEED_DEMO_PASSWORD": "Outra-Password-Longa"}
+        ):
+            seed(set_password=chosen, stderr=StringIO())
+        self.assertTrue(demo_users().first().check_password(chosen))
+
+    def test_set_password_invalid_changes_nothing(self):
+        before = dict(demo_users().values_list("pk", "password"))
+        with self.assertRaises(CommandError):
+            seed(set_password="12345678", stderr=StringIO())
+        self.assertEqual(dict(demo_users().values_list("pk", "password")), before)
+
     # ----------------------------------------------------------------- limpar
     def test_limpar_removes_only_demo(self):
         seed(limpar=True)
@@ -261,6 +317,20 @@ class UnseededTests(TestCase):
         with mock.patch.dict(os.environ, {"SEED_DEMO_PASSWORD": "curta"}):
             with self.assertRaises(CommandError):
                 seed()
+        self.assertFalse(CustomUser.objects.exists())
+
+    def test_set_password_validation_failure_creates_nothing(self):
+        for weak in ("password", "12345678", "curta"):
+            with self.assertRaises(CommandError):
+                seed(set_password=weak, stderr=StringIO())
+        self.assertFalse(CustomUser.objects.exists())
+
+    def test_set_password_prompt_mismatch_creates_nothing(self):
+        with mock.patch(
+            "getpass.getpass", side_effect=["Reuniao-2026-A", "Reuniao-2026-B"]
+        ):
+            with self.assertRaises(CommandError):
+                seed_args("--set-password")
         self.assertFalse(CustomUser.objects.exists())
 
     def test_limpar_without_demo_data_is_harmless(self):

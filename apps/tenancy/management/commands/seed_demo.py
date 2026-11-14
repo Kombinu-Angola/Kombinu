@@ -13,11 +13,14 @@ enquetes e trilhas pelos serviços normais, para o ledger de XP, o progresso
 nas trilhas e as notificações ficarem consistentes com a API.
 """
 
+import getpass
 import os
 import random
 import unicodedata
 
 from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Q
@@ -50,6 +53,8 @@ from . import _seed_demo_dados as dados
 
 PASSWORD_ENV = "SEED_DEMO_PASSWORD"
 MIN_PASSWORD_LENGTH = 12
+# Valor de `--set-password` quando a opção vem sem valor: pedir com getpass.
+PROMPT = object()
 DEMO_SLUGS = [o["slug"] for o in dados.ORGANIZACOES.values()]
 STUDENT_KEYS = list(dados.APTIDAO)
 
@@ -97,6 +102,17 @@ class Command(BaseCommand):
             action="store_true",
             help="Gera passwords novas também para as contas demo que já existem.",
         )
+        parser.add_argument(
+            "--set-password",
+            nargs="?",
+            const=PROMPT,
+            default=None,
+            metavar="PASSWORD",
+            help=(
+                "Usa esta password em todas as contas demo, incluindo as que já "
+                "existem. Sem valor, é pedida sem eco (recomendado)."
+            ),
+        )
 
     # ------------------------------------------------------------------ entrada
     def handle(self, *args, **options):
@@ -109,16 +125,46 @@ class Command(BaseCommand):
             self.limpar()
             return
 
-        env_password = os.environ.get(PASSWORD_ENV) or None
-        if env_password is not None and len(env_password) < MIN_PASSWORD_LENGTH:
-            raise CommandError(
-                f"{PASSWORD_ENV} tem de ter pelo menos {MIN_PASSWORD_LENGTH} caracteres."
-            )
+        # Prioridade: --set-password > SEED_DEMO_PASSWORD > gerada com secrets.
+        fixed_password, source = self._chosen_password(options["set_password"]), "set"
+        if fixed_password is None:
+            fixed_password, source = os.environ.get(PASSWORD_ENV) or None, "env"
+            if fixed_password is not None and len(fixed_password) < MIN_PASSWORD_LENGTH:
+                raise CommandError(
+                    f"{PASSWORD_ENV} tem de ter pelo menos {MIN_PASSWORD_LENGTH} caracteres."
+                )
+        if fixed_password is None:
+            source = None
 
         self._check_orgs_are_demo()
+        # Com --set-password, as contas demo que já existem também ficam com ela.
+        reset = options["redefinir_passwords"] or source == "set"
         with transaction.atomic():
-            credenciais = self.seed(env_password, options["redefinir_passwords"])
-        self._print_summary(credenciais, env_password is not None)
+            credenciais = self.seed(fixed_password, reset)
+        self._print_summary(credenciais, source)
+
+    def _chosen_password(self, value):
+        if value is None:
+            return None
+        if value is PROMPT:
+            password = getpass.getpass("Password para as contas demo: ")
+            if password != getpass.getpass("Repita a password: "):
+                raise CommandError("As passwords não coincidem. Nada foi alterado.")
+        else:
+            password = value
+            self.stderr.write(
+                "Aviso: a password passada em --set-password=<valor> fica no histórico "
+                "da shell. Prefira --set-password sem valor."
+            )
+        if not password:
+            raise CommandError("A password não pode ser vazia. Nada foi alterado.")
+        try:
+            validate_password(password)
+        except ValidationError as exc:
+            raise CommandError(
+                "Password recusada: " + " ".join(exc.messages) + " Nada foi alterado."
+            )
+        return password
 
     # ------------------------------------------------------------ verificações
     def _check_orgs_are_demo(self):
@@ -132,7 +178,7 @@ class Command(BaseCommand):
             )
 
     # -------------------------------------------------------------------- seed
-    def seed(self, env_password, reset_passwords):
+    def seed(self, fixed_password, reset_passwords):
         now = timezone.now()
         self.orgs = {}
         for key, data in dados.ORGANIZACOES.items():
@@ -161,12 +207,12 @@ class Command(BaseCommand):
                     user_type=user_type,
                     must_change_password=False,
                 )
-                password = env_password or generate_temporary_password()
+                password = fixed_password or generate_temporary_password()
                 user.set_password(password)
                 user.password_changed_at = now
                 user.save()
             elif reset_passwords:
-                password = env_password or generate_temporary_password()
+                password = fixed_password or generate_temporary_password()
                 user.set_password(password)
                 user.must_change_password = False
                 user.temp_password_expires_at = None
@@ -409,7 +455,7 @@ class Command(BaseCommand):
             if random.Random(f"{user.email}:visita").random() < 0.6:
                 tenancy_services.record_marketplace_visit(user)
 
-    def _print_summary(self, credenciais, from_env):
+    def _print_summary(self, credenciais, source):
         out = self.stdout
         out.write(self.style.SUCCESS("Dados de demonstração prontos."))
         for org in demo_orgs().order_by("slug"):
@@ -429,13 +475,18 @@ class Command(BaseCommand):
                 "(use --redefinir-passwords para gerar novas)."
             )
             return
-        if from_env:
+        if source == "set":
+            out.write(
+                f"{len(novas)} contas com a password escolhida em --set-password:"
+            )
+        elif source == "env":
             out.write(f"{len(novas)} contas com a password definida em {PASSWORD_ENV}:")
         else:
             out.write("Credenciais (mostradas só agora; guarde-as num local seguro):")
         width = max(len(c[0]) for c in novas)
         for email, papel, password in novas:
-            shown = "" if from_env else password
+            # Uma password escolhida (opção ou variável) nunca é impressa.
+            shown = "" if source else password
             out.write(f"  {email.ljust(width)}  {papel:<35}  {shown}")
 
     # ------------------------------------------------------------------ limpar
