@@ -181,7 +181,13 @@ O `pytest` usa `core/settings_test.py` (definido no `pytest.ini`), que herda
 de `core/settings.py` e só troca o hasher de passwords por MD5 para a suite
 correr rápido. Esse ficheiro nunca é carregado em produção: `manage.py`, WSGI
 e ASGI usam `core.settings`. Com `python manage.py test` o hasher é o real
-(PBKDF2) e a suite fica muito mais lenta.
+(Argon2id) e a suite fica mais lenta.
+
+**Hasher de passwords:** Argon2id com os parâmetros mínimos da OWASP (19 MiB,
+2 iterações, 1 thread; ver `apps/accounts/hashers.py`), em vez dos 100 MiB por
+hash do `Argon2PasswordHasher` do Django, que esgotariam a RAM com muitos
+logins em simultâneo. O PBKDF2 continua configurado para verificar as senhas
+antigas, que passam a Argon2id sozinhas no login seguinte.
 
 ### Cobertura de Testes
 
@@ -264,9 +270,24 @@ ou `marketplace`; ausente = marketplace). Exige pertença activa: UUID inválido
 → 400, sem pertença → 403, objectos de outro contexto → 404. O Swagger mostra
 o header em cada um destes endpoints.
 
-**Limites de pedidos (provisórios):** login 30/min por IP e 5/min por conta;
+**Limites de pedidos (provisórios):** login 120/min por IP e 5/min por conta;
 registo 10/hora por IP; refresh 30/min por IP. Acima do limite a API devolve
-`429 Too Many Requests`. Na submissão de quiz, cada pergunta só pode ser
+`429 Too Many Requests`, com o cabeçalho `Retry-After` e a mensagem
+`{"detail": "Demasiadas tentativas. Tenta novamente dentro de N segundos."}`.
+
+**IP do cliente atrás do proxy (`DRF_NUM_PROXIES`):** os limites por IP lêem o
+IP do `X-Forwarded-For`. Sem `DRF_NUM_PROXIES`, o DRF usa o cabeçalho inteiro
+como chave, e como o cliente controla o início do cabeçalho, consegue fugir ao
+limite por IP. No Render o pedido passa por Cloudflare → proxy do Render → app,
+e o cabeçalho chega como `<o que o cliente enviou>, <IP do cliente>, <IP do
+nó Cloudflare>`: o Render acrescenta, não substitui. O DRF usa a entrada
+`DRF_NUM_PROXIES` posições a contar da direita, por isso o valor proposto é
+**`2`** (o IP do cliente, ignorando o nó Cloudflare). Com `1`, todos os
+utilizadores que passam pelo mesmo nó Cloudflare partilhariam o limite. Este
+valor vem de um exemplo publicado por um cliente do Render, não da
+documentação oficial: confirma-o depois de o definir, por exemplo com pedidos
+de duas redes diferentes, cada uma a esgotar o seu próprio limite sem afectar
+a outra. Na submissão de quiz, cada pergunta só pode ser
 respondida uma vez por pedido (respostas repetidas devolvem `400`). A troca de
 password está limitada a 10/hora por utilizador (provisório).
 

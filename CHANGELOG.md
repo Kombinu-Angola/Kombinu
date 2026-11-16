@@ -19,6 +19,26 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - Capacidade do login (K1, K2, K5)
+
+### Alterado
+
+- **Passwords com Argon2id** (dependência nova `argon2-cffi`, fixada em `>=25.1,<26.0`).
+  - O hasher é uma subclasse com os parâmetros mínimos da OWASP: 19 MiB de memória, 2 iterações e 1 thread. O `Argon2PasswordHasher` do Django usa 100 MiB por hash, o que com dezenas de logins em simultâneo esgotaria a RAM do servidor.
+  - O PBKDF2 continua configurado para as senhas antigas, que passam a Argon2id sozinhas no login seguinte, sem revogar sessões.
+  - Em local, um `check_password` passa de cerca de 1,8 s (PBKDF2, 1 000 000 iterações) para cerca de 55 ms.
+- **Limite de login por IP de 30/min para 120/min**, para não bloquear uma turma inteira atrás do mesmo IP. O limite por conta (5/min) mantém-se.
+
+### Corrigido
+
+- **Mensagem de throttling em português correcto:** o `429` passa a responder "Demasiadas tentativas. Tenta novamente dentro de N segundos." em vez da tradução do DRF. Mantém o cabeçalho `Retry-After`.
+
+### Segurança
+
+- **`DRF_NUM_PROXIES` documentado no `.env.example` e no README**, com o valor proposto para o Render (`2`) e como confirmá-lo. Sem ele, o DRF usa o `X-Forwarded-For` inteiro como chave, e o cliente consegue fugir ao limite por IP enviando o seu próprio cabeçalho. O valor é definido no painel do Render.
+
+---
+
 ## [Não Lançado] - Conteúdos: N+1 na listagem
 
 ### Corrigido
