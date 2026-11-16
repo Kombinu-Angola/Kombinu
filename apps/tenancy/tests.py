@@ -83,7 +83,8 @@ class ContentOwnershipTests(APITestCase):
         gen = reverse("quiz-generate", args=[self.content.id])
         man = reverse("quiz-manual-create", args=[self.content.id])
         r = self.client.post(gen, {}, format="json")
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        # K6: a geração automática está desligada para todos.
+        self.assertEqual(r.status_code, status.HTTP_410_GONE)
         r = self.client.post(
             man,
             {

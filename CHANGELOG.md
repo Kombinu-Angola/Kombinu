@@ -5,6 +5,17 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Geração de quizzes pela OpenTDB desligada (K6)
+
+### Alterado
+
+- **`POST /api/quizzes/contents/{content_id}/generate-quiz/` passa a devolver `410 Gone`**, com a mensagem "A geração automática de quizzes está temporariamente indisponível." As perguntas da OpenTDB eram genéricas e muitas vezes em inglês, e o endpoint fica desligado até chegar a geração por IA.
+  - A criação manual (`manual-quiz/`) não muda.
+  - O serviço `generate_quiz_from_opentdb` mantém-se no código.
+  - No schema, o endpoint fica marcado como `deprecated`.
+
+---
+
 ## [Não Lançado] - Permissão das estatísticas de criador (K3)
 
 ### Segurança

@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -6,16 +7,18 @@ from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
 from .serializers import (
     QuizDetailSerializer,
-    QuizGenerationSerializer,
     QuizSubmissionSerializer,
 )
 from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
 from apps.contents.models import Content
-from .services import generate_quiz_from_opentdb, OpenTDBRateLimitError
 from apps.rankings.models import XPEvent
 from apps.rankings.services import quiz_submission_xp, record_xp
 from apps.tenancy.scoping import WorkspaceScopedMixin, can_create_in
 from apps.trilhas.services import on_quiz_submitted
+
+GENERATION_DISABLED_MESSAGE = (
+    "A geração automática de quizzes está temporariamente indisponível."
+)
 
 
 class _InvalidAnswer(Exception):
@@ -32,59 +35,24 @@ class QuizDetailView(WorkspaceScopedMixin, generics.RetrieveAPIView):
         return self.scope(super().get_queryset())
 
 
-class QuizGenerationView(WorkspaceScopedMixin, APIView):
+class QuizGenerationView(APIView):
+    """
+    Geração automática pela OpenTDB, desligada (K6) até chegar a geração por
+    IA. O serviço `generate_quiz_from_opentdb` mantém-se no código.
+    """
+
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={410: OpenApiResponse(description=GENERATION_DISABLED_MESSAGE)},
+        deprecated=True,
+    )
     def post(self, request, content_id):
-        # Verifica se o usuário é um criador
-        if not can_create_in(request.user, self.workspace):
-            return Response(
-                {"error": "Only creators can generate quizzes."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        return Response(
+            {"error": GENERATION_DISABLED_MESSAGE}, status=status.HTTP_410_GONE
+        )
 
-        content = get_object_or_404(self.scope(Content.objects.all()), id=content_id)
-        if content.creator_id != request.user.pk:
-            return Response(
-                {"error": "Only the content creator can generate its quiz."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        serializer = QuizGenerationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        difficulty = serializer.validated_data.get("difficulty")
-        number_of_questions = serializer.validated_data.get("number_of_questions")
-
-        # Verifica se já existe um quiz para este conteúdo
-        if hasattr(content, "quiz"):
-            return Response(
-                {"error": "A quiz already exists for this content."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Chama o serviço para gerar o quiz
-        try:
-            quiz = generate_quiz_from_opentdb(content, difficulty, number_of_questions)
-        except OpenTDBRateLimitError:
-            return Response(
-                {"error": "A API de perguntas está temporariamente sobrecarregada. Aguarda alguns segundos e tenta novamente."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        if quiz:
-            return Response(
-                {
-                    "message": "Quiz generated successfully",
-                    "quiz_id": str(quiz.pk),
-                    "content_id": str(content.pk),
-                },
-                status=status.HTTP_201_CREATED,
-            )
-        else:
-            return Response(
-                {"error": "Failed to generate quiz from Open Trivia DB."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
 
 class QuizManualCreationView(WorkspaceScopedMixin, APIView):
     permission_classes = [IsAuthenticated]
