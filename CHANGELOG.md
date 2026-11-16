@@ -5,6 +5,16 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Permissão das estatísticas de criador (K3)
+
+### Segurança
+
+- **`GET /api/dashboard/creator/stats/` passa a devolver 403** a quem não é criador (`user_type` "creator") nem professor ou admin activo no workspace do `X-Workspace`. Antes, qualquer utilizador autenticado, incluindo um estudante, recebia as estatísticas.
+  - A regra vive na permissão `IsCreatorOrWorkspaceStaff` (`apps/tenancy/permissions.py`).
+  - O ser criador não abre uma escola a que a pessoa não pertence: o `X-Workspace` continua validado contra a Membership.
+
+---
+
 ## [Não Lançado] - Gamificação do utilizador (K4)
 
 ### Adicionado
