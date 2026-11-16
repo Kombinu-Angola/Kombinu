@@ -3,6 +3,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from apps.tenancy.querysets import OrganizacaoQuerySet
+
 
 class XPEvent(models.Model):
     """
@@ -36,6 +38,8 @@ class XPEvent(models.Model):
     source_id = models.CharField(max_length=64)
     amount = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = OrganizacaoQuerySet.as_manager()
 
     class Meta:
         constraints = [
