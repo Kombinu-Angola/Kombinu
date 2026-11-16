@@ -265,6 +265,7 @@ class PasswordAwareTokenRefreshView(TokenRefreshView):
 from apps.contents.models import Content
 from apps.quizzes.models import QuizSubmission
 from apps.rankings import selectors as xp
+from apps.tenancy.permissions import IsCreatorOrWorkspaceStaff
 from apps.tenancy.scoping import WorkspaceScopedMixin
 
 
@@ -324,7 +325,7 @@ class LearnerCoursesView(WorkspaceScopedMixin, APIView):
         return Response(data)
 
 class CreatorStatsView(WorkspaceScopedMixin, APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsCreatorOrWorkspaceStaff]
 
     @extend_schema(summary="Get Creator Stats", tags=["Dashboard"])
     def get(self, request):
