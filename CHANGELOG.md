@@ -5,6 +5,20 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Gamificação do utilizador (K4)
+
+### Adicionado
+
+- **`GET /api/rankings/me/`:** XP, nível e ofensiva do próprio utilizador, com o contrato combinado com o frontend: `xp_total`, `xp_workspace`, `level`, `streak`, `best_streak` e `last_activity_date`.
+  - **XP:** `xp_total` é a carteira global; `xp_workspace` é o XP do workspace activo (`X-Workspace`), e no marketplace o XP sem organização. O `level` usa a regra que já existe (`xp_total // 100 + 1`).
+  - **Ofensiva:** `streak` conta os dias seguidos com pelo menos um `XPEvent`, por data em Africa/Luanda e sobre a carteira global, e termina hoje ou ontem: quem ainda não fez nada hoje não a perde. Se o último dia com XP for anterior a ontem, vale 0. `best_streak` é a maior sequência de sempre.
+  - **Sem gemas,** até o produto as definir.
+  - **Workspace:** é validado contra a Membership, como nos outros endpoints. Sem pertença activa dá 403; com um identificador inválido, 400.
+  - A lógica vive em `rankings/selectors.py` e a view só aplica o `scope()`.
+- O `XPEvent` passa a usar o `OrganizacaoQuerySet` como manager, para o filtro por workspace passar pelo `for_context()`. Não há migration.
+
+---
+
 ## [Não Lançado] - Conteúdos: N+1 na listagem
 
 ### Corrigido

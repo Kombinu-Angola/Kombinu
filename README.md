@@ -237,6 +237,7 @@ backend/
 | `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
 | `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
+| `/api/rankings/me/` | GET | XP e ofensiva do próprio utilizador: `xp_total` (carteira global), `xp_workspace` (workspace activo), `level`, `streak` (dias seguidos com XP, em Africa/Luanda, terminando hoje ou ontem), `best_streak` e `last_activity_date`. Respeita o `X-Workspace` |
 | `/api/enquetes/` | GET/POST | Enquetes do `X-Workspace`: publicadas e fechadas, mais os rascunhos do próprio. POST (teacher/admin; `creator` no marketplace) cria em `rascunho` |
 | `/api/enquetes/{id}/publish/` · `/close/` | POST | Criador: `rascunho` → `activa` (publicada) → `encerrada` (fechada). Transição inválida → 409. Só se vota em `activa` |
 | `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho |
