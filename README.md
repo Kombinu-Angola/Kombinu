@@ -233,7 +233,7 @@ backend/
 | `/api/contents/` | GET/POST | Listar e criar conteúdos |
 | `/api/contents/{id}/` | GET/PUT/DELETE | Detalhes de um conteúdo |
 | `/api/quizzes/{id}/` | GET | Detalhes de um quiz |
-| `/api/quizzes/{content_id}/generate/` | POST | Gerar quiz via OpenTDB (creator) |
+| `/api/quizzes/contents/{content_id}/generate-quiz/` | POST | **Desligado:** devolve `410 Gone` até chegar a geração por IA. Usar o `manual-quiz/` |
 | `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
 | `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
