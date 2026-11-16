@@ -6,8 +6,12 @@ Leitura de XP e ranking. Fonte única: o ledger `XPEvent` (nunca
 `Organizacao` = esse workspace. `ALL` soma todos os contextos (carteira
 digital única do utilizador, SLA §2 Ponto Cego 1).
 """
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
 from django.db.models import F, Sum, Window
-from django.db.models.functions import Rank
+from django.db.models.functions import Rank, TruncDate
+from django.utils import timezone
 
 from .models import XPEvent
 
@@ -62,3 +66,57 @@ def user_standing(user, organizacao):
         .count()
     )
     return {"position": ahead + 1, "total_score": total}
+
+
+# --- Gamificação do próprio utilizador (K4) -----------------------------------
+
+STREAK_TZ = ZoneInfo("Africa/Luanda")
+ONE_DAY = timedelta(days=1)
+
+
+def activity_days(user):
+    """Dias distintos (data em Africa/Luanda) com XP na carteira global, por ordem."""
+    return list(
+        XPEvent.objects.filter(user=user)
+        .annotate(day=TruncDate("created_at", tzinfo=STREAK_TZ))
+        .values_list("day", flat=True)
+        .distinct()
+        .order_by("day")
+    )
+
+
+def streaks(days, today):
+    """
+    (streak, best_streak) a partir de dias ordenados e sem repetidos. A ofensiva
+    actual termina hoje ou ontem: quem ainda não fez nada hoje não a perde. Se o
+    último dia com XP for anterior a ontem, vale 0.
+    """
+    best = run = 0
+    previous = None
+    for day in days:
+        run = run + 1 if previous is not None and day - previous == ONE_DAY else 1
+        best = max(best, run)
+        previous = day
+    current = run if previous is not None and today - previous <= ONE_DAY else 0
+    return current, best
+
+
+def gamification_summary(user, workspace_events):
+    """
+    Resumo para `GET /api/rankings/me/`. `workspace_events` é o queryset de
+    `XPEvent` já limitado ao workspace activo (`for_context`), vindo da view.
+    """
+    total = xp_total(user)
+    days = activity_days(user)
+    streak, best_streak = streaks(days, timezone.localdate(timezone=STREAK_TZ))
+    return {
+        "xp_total": total,
+        "xp_workspace": workspace_events.filter(user=user).aggregate(t=Sum("amount"))[
+            "t"
+        ]
+        or 0,
+        "level": level_for(total),
+        "streak": streak,
+        "best_streak": best_streak,
+        "last_activity_date": days[-1] if days else None,
+    }

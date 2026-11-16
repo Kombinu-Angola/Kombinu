@@ -1,4 +1,5 @@
 from django.core.paginator import Paginator
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,6 +8,8 @@ from rest_framework.views import APIView
 from apps.tenancy.scoping import WorkspaceScopedMixin
 
 from . import selectors
+from .models import XPEvent
+from .serializers import GamificationMeSerializer
 
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
@@ -70,3 +73,19 @@ class GlobalRankingView(WorkspaceScopedMixin, APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class GamificationMeView(WorkspaceScopedMixin, APIView):
+    """
+    XP, nível e ofensiva do próprio utilizador (K4). O `xp_workspace` respeita
+    o `X-Workspace`, validado contra a Membership como nos outros endpoints.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: GamificationMeSerializer})
+    def get(self, request):
+        summary = selectors.gamification_summary(
+            request.user, self.scope(XPEvent.objects.all())
+        )
+        return Response(GamificationMeSerializer(summary).data)
