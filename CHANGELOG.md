@@ -5,6 +5,22 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Cadeiras (K2)
+
+### Adicionado
+
+- **Catálogo global `Cadeira`** (`nome`, `curso`, únicos em conjunto), na app `contents`.
+  - Não tem organização: a mesma cadeira serve o marketplace e todas as escolas.
+  - Começa vazio e preenche-se pelo admin. Não havia cadeiras identificáveis nos dados que já existem, e não se inventaram.
+- **FK `cadeira`** (nullable, `SET_NULL`) em `Content`, `Quiz` e `Trilha`. A `Trilha` mantém o `subject` em texto.
+- **`GET /api/cadeiras/?curso=`:** o catálogo, sem paginação, ordenado por nome.
+- **Filtro `?cadeira=<id>`** em `GET /api/contents/` e `GET /api/trilhas/`.
+  - O filtro aplica-se sobre o queryset já limitado ao workspace activo (`scope()` / `for_context()`), por isso nunca devolve objectos de outra escola nem do marketplace.
+  - Um id inexistente dá 400.
+- Os conteúdos passam a expor `cadeira` (id ou `null`) e aceitam-na ao criar e ao editar.
+
+---
+
 ## [Não Lançado] - Geração de quizzes pela OpenTDB desligada (K6)
 
 ### Alterado
