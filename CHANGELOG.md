@@ -19,6 +19,30 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não Lançado] - Perfil académico e onboarding (K1)
+
+### Adicionado
+
+- **`PerfilEstudante`**, 1:1 com o utilizador (`user.perfil`), criado no primeiro acesso. Campos:
+  - `intent` (`exam_prep` / `explore`);
+  - `instituicao` (FK, `SET_NULL`) e `instituicao_outra`;
+  - `curso` e `ano` (1 a 6);
+  - `cadeira_foco` (FK para `Cadeira`, `SET_NULL`);
+  - `minutos_por_dia` (5/15/30/60);
+  - `provincia` (as 21 províncias de 2024);
+  - `onboarding_completed_at`.
+- **Catálogo `Instituicao`** (`nome` único, `sigla`, `provincia`), com as nove instituições de Luanda aprovadas: UAN, UCAN, ISPTEC, UGS, UMA, UOR, Lusíada, Jean Piaget e ISCED Luanda. As restantes entram pelo admin. Os dois modelos estão registados no admin.
+- **`GET/PATCH /api/me/`:** o perfil do próprio utilizador, sem id no URL.
+  - No PATCH todos os campos são opcionais, e `instituicao` e `cadeira_foco` recebem ids.
+  - Se a `instituicao` mudar e o pedido não trouxer `provincia`, a província passa a ser a da instituição.
+  - `"concluir": true` grava `onboarding_completed_at`, só da primeira vez.
+  - O `ano_entrada` é o ano de registo, só de leitura.
+  - Os valores inválidos dão 400 com mensagens em português.
+  - O email técnico das contas institucionais nunca é devolvido.
+- **`GET /api/instituicoes/`:** o catálogo, sem paginação.
+
+---
+
 ## [Não Lançado] - Cadeiras (K2)
 
 ### Adicionado
