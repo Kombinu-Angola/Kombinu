@@ -95,6 +95,8 @@ class AuthAPITest(APITestCase):
             "first_name": "New",
             "last_name": "User",
             "user_type": "learner",
+            "ano_nascimento": 2000,
+            "aceita_termos": True,
         }
         self.existing_user = CustomUser.objects.create_user(
             username="existing@example.com",
@@ -560,6 +562,8 @@ class StaleBearerOnPublicAuthEndpointsTest(APITestCase):
                 "email": "novo@example.com",
                 "password": "novopass12345",
                 "user_type": "learner",
+                "ano_nascimento": 2000,
+                "aceita_termos": True,
             },
             **self.STALE,
         )

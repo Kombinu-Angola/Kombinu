@@ -5,6 +5,33 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Consentimento e idade no registo (K3)
+
+### Adicionado
+
+- **Campos novos na conta (`CustomUser`):**
+  - `ano_nascimento`;
+  - `termos_versao` e `termos_aceites_em`;
+  - `marketing_opt_in` (por omissão `false`);
+  - `consentimento_encarregado` (`nao_necessario` / `pendente` / `concedido`).
+- **A regra vive em `apps/accounts/consentimento.py`.** A idade conta-se só pelo ano (ano actual menos `ano_nascimento`). Abaixo de `IDADE_LIMITE_CONSENTIMENTO` (hoje 18), o consentimento fica `pendente`. Mudar o limite é mudar uma linha.
+- Só se regista o estado: o fluxo de pedir a autorização ao encarregado ainda não existe.
+- **`GET /api/me/`** passa a devolver `ano_nascimento`, `marketing_opt_in` e `consentimento_encarregado`. Destes, o `PATCH` só altera o `marketing_opt_in`.
+
+### Alterado
+
+- **O registo (`POST /api/auth/register/`) passa a exigir `ano_nascimento` (entre 1900 e o ano actual) e `aceita_termos: true`.** Sem eles, devolve 400 com mensagens em português.
+  - Grava a versão dos termos em vigor (3.0, de 12 Nov 2026), a data do aceite e o estado do consentimento.
+  - Aceita `marketing_opt_in`, que é opcional.
+  - A resposta não muda.
+  - **Quebra de contrato:** o formulário de registo do frontend tem de enviar os dois campos novos.
+
+### Pendente conhecido
+
+- As contas que já existiam e as provisionadas pelas escolas (lote e `criar_admin_organizacao`) não passam pelo registo público. Ficam com estes campos a `null` (e `marketing_opt_in` a `false`), sem afectar o login. O aceite dos termos nessas contas fica para outro momento.
+
+---
+
 ## [Não Lançado] - Trilha por cadeira (K4)
 
 ### Adicionado

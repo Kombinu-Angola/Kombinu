@@ -227,7 +227,7 @@ backend/
 
 | Rota | Método | Descrição |
 | --- | --- | --- |
-| `/api/auth/register/` | POST | Registo de utilizadores |
+| `/api/auth/register/` | POST | Registo de utilizadores. Obrigatórios: `email`, `password`, `user_type`, `ano_nascimento` (1900 até ao ano actual) e `aceita_termos: true`; opcionais: `first_name`, `last_name` e `marketing_opt_in`. Grava a versão dos termos aceite (3.0) e o estado do consentimento do encarregado: `pendente` se a idade, calculada só pelo ano, for inferior a `IDADE_LIMITE_CONSENTIMENTO` (18), senão `nao_necessario` |
 | `/api/auth/login/` | POST | Login por email — devolve `access_token`, `refresh_token` e `user` (com `memberships` e `must_change_password`) |
 | `/api/auth/institutional/login/` | POST | Login institucional: `{ school_code, student_code, password }` (`school_code` = código de 6 caracteres da escola, não o UUID). Mesmo envelope; qualquer falha → 401 igual |
 | `/api/auth/password/change/` | POST | `{ current_password, new_password }` → novos `access_token`/`refresh_token`; os anteriores deixam de valer |
@@ -247,7 +247,7 @@ backend/
 | `/api/enquetes/` | GET/POST | Enquetes do `X-Workspace`: publicadas e fechadas, mais os rascunhos do próprio. POST (teacher/admin; `creator` no marketplace) cria em `rascunho` |
 | `/api/enquetes/{id}/publish/` · `/close/` | POST | Criador: `rascunho` → `activa` (publicada) → `encerrada` (fechada). Transição inválida → 409. Só se vota em `activa` |
 | `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho. Filtro `?cadeira=<id>`; a lista vem da mais recente para a mais antiga, por isso a primeira trilha publicada de uma cadeira no contexto activo é o primeiro resultado (usada no fim do onboarding) |
-| `/api/me/` | GET/PATCH | Perfil académico do próprio utilizador (onboarding), criado no primeiro GET; sem id no URL. Resposta: `id`, `nome`, `email`, `intent`, `instituicao` (`{id, nome, sigla, provincia}` ou `null`), `instituicao_outra`, `curso`, `ano` (1 a 6), `cadeira_foco` (`{id, nome}` ou `null`), `minutos_por_dia` (5/15/30/60), `provincia` (slug de uma das 21 províncias), `ano_entrada` e `onboarding_completed_at`. No PATCH todos os campos são opcionais, `instituicao` e `cadeira_foco` recebem ids, e `"concluir": true` grava a conclusão (só da primeira vez). Se mudar a `instituicao` sem `provincia` no pedido, a província passa a ser a da instituição |
+| `/api/me/` | GET/PATCH | Perfil académico do próprio utilizador (onboarding), criado no primeiro GET; sem id no URL. Também devolve `ano_nascimento`, `marketing_opt_in` e `consentimento_encarregado` (da conta); destes, o PATCH só altera o `marketing_opt_in`. Resposta: `id`, `nome`, `email`, `intent`, `instituicao` (`{id, nome, sigla, provincia}` ou `null`), `instituicao_outra`, `curso`, `ano` (1 a 6), `cadeira_foco` (`{id, nome}` ou `null`), `minutos_por_dia` (5/15/30/60), `provincia` (slug de uma das 21 províncias), `ano_entrada` e `onboarding_completed_at`. No PATCH todos os campos são opcionais, `instituicao` e `cadeira_foco` recebem ids, e `"concluir": true` grava a conclusão (só da primeira vez). Se mudar a `instituicao` sem `provincia` no pedido, a província passa a ser a da instituição |
 | `/api/instituicoes/` | GET | Catálogo de instituições (`id`, `nome`, `sigla`, `provincia`), sem paginação. Preenche-se pelo admin |
 | `/api/cadeiras/` | GET | Catálogo global de cadeiras (`id`, `nome`, `curso`), igual em todos os workspaces e sem paginação. Filtro `?curso=` (sem diferenciar maiúsculas). Preenche-se pelo admin |
 | `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
@@ -322,9 +322,11 @@ https://kombinu.onrender.com/api/
 curl -X POST https://kombinu.onrender.com/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "testuser",
     "email": "test@example.com",
-    "password": "securepassword123"
+    "password": "securepassword123",
+    "user_type": "learner",
+    "ano_nascimento": 2005,
+    "aceita_termos": true
   }'
 
 # Fazer login

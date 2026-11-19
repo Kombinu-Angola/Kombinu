@@ -3,6 +3,8 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 
+from .consentimento import CONSENTIMENTO_CHOICES
+
 
 class CustomUser(AbstractUser):
     USER_TYPE_CHOICES = (
@@ -17,6 +19,15 @@ class CustomUser(AbstractUser):
     must_change_password = models.BooleanField(default=False)
     password_changed_at = models.DateTimeField(null=True, blank=True)
     temp_password_expires_at = models.DateTimeField(null=True, blank=True)
+    # Consentimento e idade (K3). Gravados no registo público; as contas
+    # anteriores e as provisionadas pelas escolas ficam a null.
+    ano_nascimento = models.PositiveSmallIntegerField(null=True, blank=True)
+    termos_versao = models.CharField(max_length=20, null=True, blank=True)
+    termos_aceites_em = models.DateTimeField(null=True, blank=True)
+    marketing_opt_in = models.BooleanField(default=False)
+    consentimento_encarregado = models.CharField(
+        max_length=20, choices=CONSENTIMENTO_CHOICES, null=True, blank=True
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

@@ -24,6 +24,9 @@ CONTRACT_KEYS = {
     "provincia",
     "ano_entrada",
     "onboarding_completed_at",
+    "ano_nascimento",
+    "marketing_opt_in",
+    "consentimento_encarregado",
 }
 
 

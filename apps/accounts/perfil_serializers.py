@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from apps.contents.models import Cadeira
 
+from .consentimento import CONSENTIMENTO_CHOICES
 from .models import PROVINCIA_CHOICES, Instituicao, PerfilEstudante
 from .serializers import UserProfileSerializer
 
@@ -31,6 +32,19 @@ class PerfilSerializer(serializers.ModelSerializer):
     instituicao = InstituicaoSerializer(read_only=True, allow_null=True)
     cadeira_foco = CadeiraFocoSerializer(read_only=True, allow_null=True)
     ano_entrada = serializers.SerializerMethodField()
+    # K3: guardados na conta (CustomUser), não no perfil.
+    ano_nascimento = serializers.IntegerField(
+        source="user.ano_nascimento", read_only=True, allow_null=True
+    )
+    marketing_opt_in = serializers.BooleanField(
+        source="user.marketing_opt_in", read_only=True
+    )
+    consentimento_encarregado = serializers.ChoiceField(
+        source="user.consentimento_encarregado",
+        choices=CONSENTIMENTO_CHOICES,
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = PerfilEstudante
@@ -48,6 +62,9 @@ class PerfilSerializer(serializers.ModelSerializer):
             "provincia",
             "ano_entrada",
             "onboarding_completed_at",
+            "ano_nascimento",
+            "marketing_opt_in",
+            "consentimento_encarregado",
         )
         read_only_fields = fields
 
@@ -144,6 +161,12 @@ class PerfilUpdateSerializer(serializers.ModelSerializer):
         write_only=True,
         error_messages={"invalid": "`concluir` tem de ser true ou false."},
     )
+    # K3: o único campo da conta que o próprio pode mudar aqui.
+    marketing_opt_in = serializers.BooleanField(
+        required=False,
+        write_only=True,
+        error_messages={"invalid": "`marketing_opt_in` tem de ser true ou false."},
+    )
 
     class Meta:
         model = PerfilEstudante
@@ -157,10 +180,14 @@ class PerfilUpdateSerializer(serializers.ModelSerializer):
             "minutos_por_dia",
             "provincia",
             "concluir",
+            "marketing_opt_in",
         )
 
     def update(self, instance, validated_data):
         concluir = validated_data.pop("concluir", False)
+        if "marketing_opt_in" in validated_data:
+            instance.user.marketing_opt_in = validated_data.pop("marketing_opt_in")
+            instance.user.save(update_fields=["marketing_opt_in"])
         instituicao = validated_data.get("instituicao", instance.instituicao)
         # Instituição nova e sem província no pedido: a província é a dela.
         if (

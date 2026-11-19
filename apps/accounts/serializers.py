@@ -1,10 +1,17 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.tenancy.models import Membership
 
+from .consentimento import (
+    ANO_MINIMO_NASCIMENTO,
+    TERMOS_VERSAO_ACTUAL,
+    ano_actual,
+    estado_consentimento,
+)
 from .institutional import is_reserved_email, is_technical_email
 from .models import CustomUser
 
@@ -15,10 +22,56 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    # K3: idade e aceite dos termos são obrigatórios no registo.
+    ano_nascimento = serializers.IntegerField(
+        error_messages={
+            "required": "Indica o ano de nascimento.",
+            "null": "Indica o ano de nascimento.",
+            "invalid": "Indica o ano de nascimento como um número (ex.: 2005).",
+        }
+    )
+    aceita_termos = serializers.BooleanField(
+        write_only=True,
+        error_messages={
+            "required": "Tens de aceitar os termos de utilização para criar conta.",
+            "null": "Tens de aceitar os termos de utilização para criar conta.",
+            "invalid": "Tens de aceitar os termos de utilização para criar conta.",
+        },
+    )
+    marketing_opt_in = serializers.BooleanField(
+        required=False,
+        default=False,
+        error_messages={"invalid": "`marketing_opt_in` tem de ser true ou false."},
+    )
 
     class Meta:
         model = CustomUser
-        fields = ("email", "password", "user_type", "first_name", "last_name")
+        fields = (
+            "email",
+            "password",
+            "user_type",
+            "first_name",
+            "last_name",
+            "ano_nascimento",
+            "aceita_termos",
+            "marketing_opt_in",
+        )
+
+    def validate_ano_nascimento(self, value):
+        actual = ano_actual()
+        if not ANO_MINIMO_NASCIMENTO <= value <= actual:
+            raise serializers.ValidationError(
+                f"O ano de nascimento tem de estar entre {ANO_MINIMO_NASCIMENTO} "
+                f"e {actual}."
+            )
+        return value
+
+    def validate_aceita_termos(self, value):
+        if value is not True:
+            raise serializers.ValidationError(
+                "Tens de aceitar os termos de utilização para criar conta."
+            )
+        return value
 
     def validate_email(self, value):
         # O domínio técnico é reservado às contas institucionais (D1/D12).
@@ -36,6 +89,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             user_type=validated_data["user_type"],
             first_name=validated_data.get("first_name", ""),
             last_name=validated_data.get("last_name", ""),
+            ano_nascimento=validated_data["ano_nascimento"],
+            termos_versao=TERMOS_VERSAO_ACTUAL,
+            termos_aceites_em=timezone.now(),
+            marketing_opt_in=validated_data.get("marketing_opt_in", False),
+            consentimento_encarregado=estado_consentimento(
+                validated_data["ano_nascimento"]
+            ),
         )
         return user
 
@@ -103,11 +163,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_pontos(self, obj):
         # Carteira global: XP de todos os contextos (fonte: XPEvent).
         from apps.rankings.selectors import xp_total
+
         return xp_total(obj)
 
     @extend_schema_field(serializers.IntegerField())
     def get_nivel(self, obj):
         from apps.rankings.selectors import level_for
+
         return level_for(self.get_pontos(obj))
 
     @extend_schema_field(MembershipSummarySerializer(many=True))
