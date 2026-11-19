@@ -5,6 +5,20 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Trilha por cadeira (K4)
+
+### Adicionado
+
+- **Testes de `GET /api/trilhas/?cadeira=<id>`, o filtro que o ecrã final do onboarding usa para abrir a primeira trilha publicada da cadeira de foco no contexto activo.** Confirmam que o filtro:
+  - devolve só as trilhas publicadas e não arquivadas dessa cadeira, da mais recente para a mais antiga;
+  - não mostra trilhas de outra escola nem do marketplace;
+  - devolve uma lista vazia se a cadeira não tiver trilhas;
+  - dá 400 com uma cadeira inexistente.
+  
+  O filtro vem do K2 e o código não muda.
+
+---
+
 ## [Não Lançado] - Cadeiras (K2)
 
 ### Adicionado

@@ -246,7 +246,7 @@ backend/
 | `/api/rankings/me/` | GET | XP e ofensiva do próprio utilizador: `xp_total` (carteira global), `xp_workspace` (workspace activo), `level`, `streak` (dias seguidos com XP, em Africa/Luanda, terminando hoje ou ontem), `best_streak` e `last_activity_date`. Respeita o `X-Workspace` |
 | `/api/enquetes/` | GET/POST | Enquetes do `X-Workspace`: publicadas e fechadas, mais os rascunhos do próprio. POST (teacher/admin; `creator` no marketplace) cria em `rascunho` |
 | `/api/enquetes/{id}/publish/` · `/close/` | POST | Criador: `rascunho` → `activa` (publicada) → `encerrada` (fechada). Transição inválida → 409. Só se vota em `activa` |
-| `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho. Filtro `?cadeira=<id>` |
+| `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho. Filtro `?cadeira=<id>`; a lista vem da mais recente para a mais antiga, por isso a primeira trilha publicada de uma cadeira no contexto activo é o primeiro resultado (usada no fim do onboarding) |
 | `/api/cadeiras/` | GET | Catálogo global de cadeiras (`id`, `nome`, `curso`), igual em todos os workspaces e sem paginação. Filtro `?curso=` (sem diferenciar maiúsculas). Preenche-se pelo admin |
 | `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
 | `/api/trilhas/{id}/publish/` | POST | Publicar (exige pelo menos um passo) |
