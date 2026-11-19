@@ -28,6 +28,15 @@ class Trilha(models.Model):
     title = models.CharField(max_length=255)
     headline = models.CharField(max_length=255, blank=True, default="")
     subject = models.CharField(max_length=120)
+    # K2: a cadeira do catálogo global. O `subject` em texto mantém-se até à
+    # migração dos dados.
+    cadeira = models.ForeignKey(
+        "contents.Cadeira",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trilhas",
+    )
     year = models.CharField(max_length=30, blank=True, default="")
     semester = models.CharField(max_length=30, blank=True, default="")
     final_exam = models.ForeignKey(

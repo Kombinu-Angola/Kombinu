@@ -1,5 +1,6 @@
 from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
@@ -69,12 +70,20 @@ class _AuthoringMixin(WorkspaceScopedMixin):
 
 
 class TrilhaListView(_AuthoringMixin, generics.ListCreateAPIView):
+    # `?cadeira=<id>` filtra sobre as trilhas já limitadas ao workspace
+    # (`_trilhas_for` → `scope()`).
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["cadeira"]
+
     def get_serializer_class(self):
         if self.request.method == "POST":
             return TrilhaWriteSerializer
         return LearningTrailSerializer
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            # Geração do schema: sem utilizador nem workspace.
+            return Trilha.objects.none()
         return _trilhas_for(self).order_by("-created_at")
 
     @extend_schema(
