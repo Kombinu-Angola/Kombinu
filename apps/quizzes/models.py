@@ -20,6 +20,13 @@ class Quiz(models.Model):
         related_name="quizzes",
         help_text="NULL = marketplace (B2C).",
     )
+    cadeira = models.ForeignKey(
+        "contents.Cadeira",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="quizzes",
+    )
 
     objects = OrganizacaoQuerySet.as_manager()
 
