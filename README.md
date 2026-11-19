@@ -236,7 +236,7 @@ backend/
 | `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
 | `/api/dashboard/learner/courses/` | GET | Cursos frequentados |
 | `/api/dashboard/creator/stats/` | GET | Estatísticas do criador |
-| `/api/contents/` | GET/POST | Listar e criar conteúdos |
+| `/api/contents/` | GET/POST | Listar e criar conteúdos. Filtros: `category`, `creator`, `cadeira` (id), `has_quiz` e `search`, sempre dentro do `X-Workspace`. Cada conteúdo traz `cadeira` (id ou `null`), que também se pode enviar ao criar ou editar |
 | `/api/contents/{id}/` | GET/PUT/DELETE | Detalhes de um conteúdo |
 | `/api/quizzes/{id}/` | GET | Detalhes de um quiz |
 | `/api/quizzes/contents/{content_id}/generate-quiz/` | POST | **Desligado:** devolve `410 Gone` até chegar a geração por IA. Usar o `manual-quiz/` |
@@ -246,7 +246,8 @@ backend/
 | `/api/rankings/me/` | GET | XP e ofensiva do próprio utilizador: `xp_total` (carteira global), `xp_workspace` (workspace activo), `level`, `streak` (dias seguidos com XP, em Africa/Luanda, terminando hoje ou ontem), `best_streak` e `last_activity_date`. Respeita o `X-Workspace` |
 | `/api/enquetes/` | GET/POST | Enquetes do `X-Workspace`: publicadas e fechadas, mais os rascunhos do próprio. POST (teacher/admin; `creator` no marketplace) cria em `rascunho` |
 | `/api/enquetes/{id}/publish/` · `/close/` | POST | Criador: `rascunho` → `activa` (publicada) → `encerrada` (fechada). Transição inválida → 409. Só se vota em `activa` |
-| `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho |
+| `/api/trilhas/` | GET/POST | Listar trilhas do `X-Workspace` (publicadas, mais os rascunhos do próprio) e criar (teacher/admin na escola, `creator` no marketplace). Nasce rascunho. Filtro `?cadeira=<id>` |
+| `/api/cadeiras/` | GET | Catálogo global de cadeiras (`id`, `nome`, `curso`), igual em todos os workspaces e sem paginação. Filtro `?curso=` (sem diferenciar maiúsculas). Preenche-se pelo admin |
 | `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
 | `/api/trilhas/{id}/publish/` | POST | Publicar (exige pelo menos um passo) |
 | `/api/trilhas/{id}/archive/` · `/unarchive/` | POST | Arquivar ou desarquivar (criador). Arquivada, sai das listagens dos alunos; o progresso mantém-se |

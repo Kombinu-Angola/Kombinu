@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/auth/", include("apps.accounts.urls")),
     path("api/dashboard/", include("apps.accounts.dashboard_urls")),
     path("api/contents/", include("apps.contents.urls")),
+    path("api/cadeiras/", include("apps.contents.cadeiras_urls")),
     path("api/quizzes/", include("apps.quizzes.urls")),
     path("api/rankings/", include("apps.rankings.urls")),
     path("api/enquetes/", include("apps.enquetes.urls")),

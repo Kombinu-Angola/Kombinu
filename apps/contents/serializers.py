@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Content
+from .models import Cadeira, Content
 
 
 class CreatorSerializer(serializers.ModelSerializer):
@@ -37,3 +37,9 @@ class ContentSerializer(serializers.ModelSerializer):
 
 class ContentListSerializer(ContentSerializer):
     pass
+
+
+class CadeiraSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cadeira
+        fields = ("id", "nome", "curso")
