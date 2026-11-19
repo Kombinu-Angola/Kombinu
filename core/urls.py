@@ -21,6 +21,8 @@ urlpatterns = [
     path("api/trilhas/", include("apps.trilhas.urls")),
     path("api/tenancy/", include("apps.tenancy.urls")),
     path("api/notifications/", include("apps.notificacoes.urls")),
+    # Perfil académico (K1): /api/me/ e /api/instituicoes/.
+    path("api/", include("apps.accounts.perfil_urls")),
     # Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
