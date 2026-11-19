@@ -1,12 +1,13 @@
 from django.db.models import ProtectedError
-from rest_framework import viewsets, filters, status
+from rest_framework import filters, generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.tenancy.scoping import WorkspaceScopedMixin, can_create_in
-from .models import Content
-from .serializers import ContentListSerializer, ContentSerializer
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from .models import Cadeira, Content
+from .serializers import CadeiraSerializer, ContentListSerializer, ContentSerializer
 from .permissions import IsCreator, IsContentOwner
 
 
@@ -18,7 +19,8 @@ class ContentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     )
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ["category", "creator"]
+    # `cadeira` filtra sobre o queryset já limitado ao workspace (get_queryset).
+    filterset_fields = ["category", "creator", "cadeira"]
     search_fields = ["title", "description"]
 
     def get_serializer_class(self):
@@ -61,4 +63,31 @@ class ContentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(quiz__isnull=False)
             elif has_quiz_param.lower() == "false":
                 queryset = queryset.filter(quiz__isnull=True)
+        return queryset
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            "curso",
+            str,
+            description="Só as cadeiras deste curso (sem diferenciar maiúsculas).",
+        )
+    ]
+)
+class CadeiraListView(generics.ListAPIView):
+    """
+    Catálogo global de cadeiras (K2): igual em todos os workspaces, por isso
+    não depende do `X-Workspace`. Sem paginação: é uma lista para um seletor.
+    """
+
+    serializer_class = CadeiraSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = Cadeira.objects.all()
+        curso = (self.request.query_params.get("curso") or "").strip()
+        if curso:
+            queryset = queryset.filter(curso__iexact=curso)
         return queryset

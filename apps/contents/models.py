@@ -4,6 +4,27 @@ from apps.tenancy.querysets import OrganizacaoQuerySet
 import uuid
 
 
+class Cadeira(models.Model):
+    """
+    Catálogo global de cadeiras (K2). Não tem FK de organização: a mesma
+    cadeira serve o marketplace e todas as escolas. O isolamento continua nos
+    objectos que a referem (conteúdos, quizzes e trilhas), sempre por
+    `for_context()`.
+    """
+
+    nome = models.CharField(max_length=160)
+    curso = models.CharField(max_length=120, blank=True, default="")
+
+    class Meta:
+        unique_together = ("nome", "curso")
+        ordering = ["nome", "curso"]
+        verbose_name = "cadeira"
+        verbose_name_plural = "cadeiras"
+
+    def __str__(self):
+        return f"{self.nome} ({self.curso})" if self.curso else self.nome
+
+
 class Content(models.Model):
     CATEGORY_CHOICES = (
         ("tecnologia", "Tecnologia"),
@@ -33,6 +54,13 @@ class Content(models.Model):
         help_text="NULL = marketplace (B2C).",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    cadeira = models.ForeignKey(
+        Cadeira,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contents",
+    )
 
     # Campos adicionados para suportar o formulário de criação de conteúdo
     thumbnail = models.URLField(blank=True, default="")
