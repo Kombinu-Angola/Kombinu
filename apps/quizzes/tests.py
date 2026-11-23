@@ -2,7 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from apps.accounts.models import CustomUser
 from apps.contents.models import Content
 from apps.quizzes.models import Quiz, Question, Option, QuizSubmission, QuizAnswer
@@ -201,31 +201,23 @@ class QuizAPITest(APITestCase):
             "quiz-generate", kwargs={"content_id": self.content.id}
         )
 
-    @patch("apps.quizzes.views.generate_quiz_from_opentdb")
-    def test_generate_quiz_success(self, mock_generate):
-        """Testa gerar quiz com sucesso (mockando serviço externo)"""
+    @patch("apps.quizzes.services._call_opentdb")
+    def test_generate_quiz_is_gone(self, mock_call):
+        """K6: a geração pela OpenTDB está desligada e devolve 410."""
         self.client.force_authenticate(user=self.creator)
-
-        # Mock return value
-        mock_quiz = MagicMock()
-        mock_quiz.pk = "12345678-1234-5678-1234-567812345678"
-        mock_generate.return_value = mock_quiz
-
         data = {"difficulty": "easy", "number_of_questions": 5}
         response = self.client.post(self.generate_url, data)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn("quiz_id", response.data)
+        self.assertEqual(response.status_code, status.HTTP_410_GONE)
+        self.assertEqual(
+            response.data["error"],
+            "A geração automática de quizzes está temporariamente indisponível.",
+        )
+        mock_call.assert_not_called()
+        self.assertFalse(Quiz.objects.filter(content=self.content).exists())
 
-    @patch("apps.quizzes.views.generate_quiz_from_opentdb")
-    def test_generate_quiz_rate_limit_returns_503(self, mock_generate):
-        """Testa que rate limit da OpenTDB retorna 503 com mensagem específica"""
-        from apps.quizzes.services import OpenTDBRateLimitError
-
-        mock_generate.side_effect = OpenTDBRateLimitError("rate limit")
-        self.client.force_authenticate(user=self.creator)
-        response = self.client.post(self.generate_url, {"difficulty": "easy"})
-        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertIn("sobrecarregada", response.data["error"])
+    def test_generate_quiz_requires_authentication(self):
+        response = self.client.post(self.generate_url, {})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("apps.quizzes.services._call_opentdb")
     def test_generate_quiz_fallback_to_english(self, mock_call):
@@ -254,11 +246,12 @@ class QuizAPITest(APITestCase):
         self.assertNotIn("lang", second_params)
 
     def test_generate_quiz_as_learner(self):
-        """Testa gerar quiz como aprendiz (deve falhar)"""
+        """Também desligada para aprendizes: 410, sem criar nada."""
         self.client.force_authenticate(user=self.learner)
         data = {"difficulty": "easy", "number_of_questions": 5}
         response = self.client.post(self.generate_url, data)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_410_GONE)
+        self.assertFalse(Quiz.objects.filter(content=self.content).exists())
 
     def test_submit_quiz(self):
         """Testa submeter respostas de um quiz"""

@@ -137,6 +137,15 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
+# K1: Argon2id com os parâmetros mínimos da OWASP (ver apps/accounts/hashers.py).
+# O PBKDF2 fica a seguir para verificar as senhas antigas, que passam a Argon2
+# sozinhas no login seguinte.
+PASSWORD_HASHERS = [
+    "apps.accounts.hashers.KombinuArgon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -213,11 +222,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "apps.tenancy.schema.WorkspaceAutoSchema",
+    "EXCEPTION_HANDLER": "core.exceptions.exception_handler",
     # Valores provisórios (D8 do relatório de auth institucional). A cache
     # por omissão é local a cada processo: com N workers o limite efectivo
     # é até N vezes maior.
     "DEFAULT_THROTTLE_RATES": {
-        "login": "30/min",
+        "login": "120/min",
         "login_identifier": "5/min",
         "register": "10/hour",
         "token_refresh": "30/min",
@@ -233,7 +243,7 @@ REST_FRAMEWORK = {
     else None,
 }
 
-# Provisionamento em lote (D4): cada conta faz um hash PBKDF2, por isso o lote
+# Provisionamento em lote (D4): cada conta faz um hash de password, por isso o lote
 # tem de caber no timeout do worker (gunicorn: 30 s por omissão). Ajustar
 # depois de medir o custo do hash no servidor de produção.
 PROVISIONING_MAX_ROWS = int(os.getenv("PROVISIONING_MAX_ROWS", "20"))

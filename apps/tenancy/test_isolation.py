@@ -234,7 +234,9 @@ class TenantIsolationTests(APITestCase):
             format="json",
             **self._hdr(self.org_a),
         )
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        # K6: a geração automática está desligada para todos (410).
+        self.assertEqual(r.status_code, status.HTTP_410_GONE)
+        self.assertFalse(Quiz.objects.filter(content=content).exists())
 
     def test_marketplace_creation_still_requires_creator_type(self):
         content = make_content(self.market_creator, "Mkt sem quiz")

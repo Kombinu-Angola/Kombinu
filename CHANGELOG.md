@@ -5,6 +5,61 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Geração de quizzes pela OpenTDB desligada (K6)
+
+### Alterado
+
+- **`POST /api/quizzes/contents/{content_id}/generate-quiz/` passa a devolver `410 Gone`**, com a mensagem "A geração automática de quizzes está temporariamente indisponível." As perguntas da OpenTDB eram genéricas e muitas vezes em inglês, e o endpoint fica desligado até chegar a geração por IA.
+  - A criação manual (`manual-quiz/`) não muda.
+  - O serviço `generate_quiz_from_opentdb` mantém-se no código.
+  - No schema, o endpoint fica marcado como `deprecated`.
+
+---
+
+## [Não Lançado] - Permissão das estatísticas de criador (K3)
+
+### Segurança
+
+- **`GET /api/dashboard/creator/stats/` passa a devolver 403** a quem não é criador (`user_type` "creator") nem professor ou admin activo no workspace do `X-Workspace`. Antes, qualquer utilizador autenticado, incluindo um estudante, recebia as estatísticas.
+  - A regra vive na permissão `IsCreatorOrWorkspaceStaff` (`apps/tenancy/permissions.py`).
+  - O ser criador não abre uma escola a que a pessoa não pertence: o `X-Workspace` continua validado contra a Membership.
+
+---
+
+## [Não Lançado] - Gamificação do utilizador (K4)
+
+### Adicionado
+
+- **`GET /api/rankings/me/`:** XP, nível e ofensiva do próprio utilizador, com o contrato combinado com o frontend: `xp_total`, `xp_workspace`, `level`, `streak`, `best_streak` e `last_activity_date`.
+  - **XP:** `xp_total` é a carteira global; `xp_workspace` é o XP do workspace activo (`X-Workspace`), e no marketplace o XP sem organização. O `level` usa a regra que já existe (`xp_total // 100 + 1`).
+  - **Ofensiva:** `streak` conta os dias seguidos com pelo menos um `XPEvent`, por data em Africa/Luanda e sobre a carteira global, e termina hoje ou ontem: quem ainda não fez nada hoje não a perde. Se o último dia com XP for anterior a ontem, vale 0. `best_streak` é a maior sequência de sempre.
+  - **Sem gemas,** até o produto as definir.
+  - **Workspace:** é validado contra a Membership, como nos outros endpoints. Sem pertença activa dá 403; com um identificador inválido, 400.
+  - A lógica vive em `rankings/selectors.py` e a view só aplica o `scope()`.
+- O `XPEvent` passa a usar o `OrganizacaoQuerySet` como manager, para o filtro por workspace passar pelo `for_context()`. Não há migration.
+
+---
+
+## [Não Lançado] - Capacidade do login (K1, K2, K5)
+
+### Alterado
+
+- **Passwords com Argon2id** (dependência nova `argon2-cffi`, fixada em `>=25.1,<26.0`).
+  - O hasher é uma subclasse com os parâmetros mínimos da OWASP: 19 MiB de memória, 2 iterações e 1 thread. O `Argon2PasswordHasher` do Django usa 100 MiB por hash, o que com dezenas de logins em simultâneo esgotaria a RAM do servidor.
+  - O PBKDF2 continua configurado para as senhas antigas, que passam a Argon2id sozinhas no login seguinte, sem revogar sessões.
+  - Em local, um `check_password` passa de cerca de 1,8 s (PBKDF2, 1 000 000 iterações) para cerca de 55 ms.
+- **Limite de login por IP de 30/min para 120/min**, para não bloquear uma turma inteira atrás do mesmo IP. O limite por conta (5/min) mantém-se.
+
+### Corrigido
+
+- **Mensagem de throttling em português correcto:** o `429` passa a responder "Demasiadas tentativas. Tenta novamente dentro de N segundos." em vez da tradução do DRF. Mantém o cabeçalho `Retry-After`.
+
+### Segurança
+
+- **`DRF_NUM_PROXIES` documentado no `.env.example` e no README**, com o valor proposto para o Render (`2`) e como confirmá-lo. Sem ele, o DRF usa o `X-Forwarded-For` inteiro como chave, e o cliente consegue fugir ao limite por IP enviando o seu próprio cabeçalho. O valor é definido no painel do Render.
+
+---
+
 ## [Não Lançado] - Conteúdos: N+1 na listagem
 
 ### Corrigido
