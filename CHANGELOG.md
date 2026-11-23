@@ -5,6 +5,87 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Consentimento e idade no registo (K3)
+
+### Adicionado
+
+- **Campos novos na conta (`CustomUser`):**
+  - `ano_nascimento`;
+  - `termos_versao` e `termos_aceites_em`;
+  - `marketing_opt_in` (por omissão `false`);
+  - `consentimento_encarregado` (`nao_necessario` / `pendente` / `concedido`).
+- **A regra vive em `apps/accounts/consentimento.py`.** A idade conta-se só pelo ano (ano actual menos `ano_nascimento`). Abaixo de `IDADE_LIMITE_CONSENTIMENTO` (hoje 18), o consentimento fica `pendente`. Mudar o limite é mudar uma linha.
+- Só se regista o estado: o fluxo de pedir a autorização ao encarregado ainda não existe.
+- **`GET /api/me/`** passa a devolver `ano_nascimento`, `marketing_opt_in` e `consentimento_encarregado`. Destes, o `PATCH` só altera o `marketing_opt_in`.
+
+### Alterado
+
+- **O registo (`POST /api/auth/register/`) passa a exigir `ano_nascimento` (entre 1900 e o ano actual) e `aceita_termos: true`.** Sem eles, devolve 400 com mensagens em português.
+  - Grava a versão dos termos em vigor (3.0, de 12 Nov 2026), a data do aceite e o estado do consentimento.
+  - Aceita `marketing_opt_in`, que é opcional.
+  - A resposta não muda.
+  - **Quebra de contrato:** o formulário de registo do frontend tem de enviar os dois campos novos.
+
+### Pendente conhecido
+
+- As contas que já existiam e as provisionadas pelas escolas (lote e `criar_admin_organizacao`) não passam pelo registo público. Ficam com estes campos a `null` (e `marketing_opt_in` a `false`), sem afectar o login. O aceite dos termos nessas contas fica para outro momento.
+
+---
+
+## [Não Lançado] - Trilha por cadeira (K4)
+
+### Adicionado
+
+- **Testes de `GET /api/trilhas/?cadeira=<id>`, o filtro que o ecrã final do onboarding usa para abrir a primeira trilha publicada da cadeira de foco no contexto activo.** Confirmam que o filtro:
+  - devolve só as trilhas publicadas e não arquivadas dessa cadeira, da mais recente para a mais antiga;
+  - não mostra trilhas de outra escola nem do marketplace;
+  - devolve uma lista vazia se a cadeira não tiver trilhas;
+  - dá 400 com uma cadeira inexistente.
+  
+  O filtro vem do K2 e o código não muda.
+
+---
+
+## [Não Lançado] - Perfil académico e onboarding (K1)
+
+### Adicionado
+
+- **`PerfilEstudante`**, 1:1 com o utilizador (`user.perfil`), criado no primeiro acesso. Campos:
+  - `intent` (`exam_prep` / `explore`);
+  - `instituicao` (FK, `SET_NULL`) e `instituicao_outra`;
+  - `curso` e `ano` (1 a 6);
+  - `cadeira_foco` (FK para `Cadeira`, `SET_NULL`);
+  - `minutos_por_dia` (5/15/30/60);
+  - `provincia` (as 21 províncias de 2024);
+  - `onboarding_completed_at`.
+- **Catálogo `Instituicao`** (`nome` único, `sigla`, `provincia`), com as nove instituições de Luanda aprovadas: UAN, UCAN, ISPTEC, UGS, UMA, UOR, Lusíada, Jean Piaget e ISCED Luanda. As restantes entram pelo admin. Os dois modelos estão registados no admin.
+- **`GET/PATCH /api/me/`:** o perfil do próprio utilizador, sem id no URL.
+  - No PATCH todos os campos são opcionais, e `instituicao` e `cadeira_foco` recebem ids.
+  - Se a `instituicao` mudar e o pedido não trouxer `provincia`, a província passa a ser a da instituição.
+  - `"concluir": true` grava `onboarding_completed_at`, só da primeira vez.
+  - O `ano_entrada` é o ano de registo, só de leitura.
+  - Os valores inválidos dão 400 com mensagens em português.
+  - O email técnico das contas institucionais nunca é devolvido.
+- **`GET /api/instituicoes/`:** o catálogo, sem paginação.
+
+---
+
+## [Não Lançado] - Cadeiras (K2)
+
+### Adicionado
+
+- **Catálogo global `Cadeira`** (`nome`, `curso`, únicos em conjunto), na app `contents`.
+  - Não tem organização: a mesma cadeira serve o marketplace e todas as escolas.
+  - Começa vazio e preenche-se pelo admin. Não havia cadeiras identificáveis nos dados que já existem, e não se inventaram.
+- **FK `cadeira`** (nullable, `SET_NULL`) em `Content`, `Quiz` e `Trilha`. A `Trilha` mantém o `subject` em texto.
+- **`GET /api/cadeiras/?curso=`:** o catálogo, sem paginação, ordenado por nome.
+- **Filtro `?cadeira=<id>`** em `GET /api/contents/` e `GET /api/trilhas/`.
+  - O filtro aplica-se sobre o queryset já limitado ao workspace activo (`scope()` / `for_context()`), por isso nunca devolve objectos de outra escola nem do marketplace.
+  - Um id inexistente dá 400.
+- Os conteúdos passam a expor `cadeira` (id ou `null`) e aceitam-na ao criar e ao editar.
+
+---
+
 ## [Não Lançado] - Geração de quizzes pela OpenTDB desligada (K6)
 
 ### Alterado

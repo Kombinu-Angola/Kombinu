@@ -14,12 +14,15 @@ urlpatterns = [
     path("api/auth/", include("apps.accounts.urls")),
     path("api/dashboard/", include("apps.accounts.dashboard_urls")),
     path("api/contents/", include("apps.contents.urls")),
+    path("api/cadeiras/", include("apps.contents.cadeiras_urls")),
     path("api/quizzes/", include("apps.quizzes.urls")),
     path("api/rankings/", include("apps.rankings.urls")),
     path("api/enquetes/", include("apps.enquetes.urls")),
     path("api/trilhas/", include("apps.trilhas.urls")),
     path("api/tenancy/", include("apps.tenancy.urls")),
     path("api/notifications/", include("apps.notificacoes.urls")),
+    # Perfil académico (K1): /api/me/ e /api/instituicoes/.
+    path("api/", include("apps.accounts.perfil_urls")),
     # Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
