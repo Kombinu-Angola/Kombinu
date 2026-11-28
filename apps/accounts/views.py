@@ -59,6 +59,12 @@ class RegisterView(APIView):
                             "format": "email",
                             "example": "user@example.com",
                         },
+                        "user_type": {
+                            "type": "string",
+                            "enum": ["learner"],
+                            "example": "learner",
+                            "description": "Sempre `learner`: o registo público não cria criadores.",
+                        },
                     },
                 },
                 description="Usuário criado com sucesso",
@@ -93,6 +99,7 @@ class RegisterView(APIView):
                     "message": "User created successfuly.",
                     "user_id": str(user.id),
                     "email": user.email,
+                    "user_type": user.user_type,
                 },
                 status=status.HTTP_201_CREATED,
             )
