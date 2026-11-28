@@ -18,7 +18,18 @@ from .models import CustomUser
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
-    user_type = serializers.ChoiceField(choices=CustomUser.USER_TYPE_CHOICES)
+    # Obsoleto (C-K5): o registo público cria sempre `learner`. O campo
+    # continua aceite, para não partir o frontend em produção, mas é ignorado.
+    # A promoção a criador faz-se só pelo admin.
+    user_type = serializers.ChoiceField(
+        choices=CustomUser.USER_TYPE_CHOICES,
+        required=False,
+        write_only=True,
+        help_text=(
+            "Obsoleto e ignorado: o registo público cria sempre uma conta "
+            "`learner`. A promoção a criador é feita pelo admin."
+        ),
+    )
     email = serializers.EmailField(required=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
@@ -86,7 +97,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             username=validated_data["email"],
             email=validated_data["email"],
             password=validated_data["password"],
-            user_type=validated_data["user_type"],
+            user_type="learner",
             first_name=validated_data.get("first_name", ""),
             last_name=validated_data.get("last_name", ""),
             ano_nascimento=validated_data["ano_nascimento"],

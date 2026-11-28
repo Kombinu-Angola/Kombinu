@@ -108,7 +108,7 @@ class RegistoGravaConsentimentoTests(RegistoBase):
 
     def test_response_contract_unchanged(self):
         r = self.register()
-        self.assertEqual(set(r.data), {"message", "user_id", "email"})
+        self.assertEqual(set(r.data), {"message", "user_id", "email", "user_type"})
 
 
 class ConsentimentoRegraTests(APITestCase):
