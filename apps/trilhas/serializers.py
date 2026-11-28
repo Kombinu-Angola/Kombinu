@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.contents.serializers import CadeiraField
+
 from . import services
 from .models import Trilha, TrilhaItem
 
@@ -35,12 +37,14 @@ class LearningTrailSerializer(serializers.ModelSerializer):
     isSequential = serializers.BooleanField(source="is_sequential", read_only=True)
     isPublished = serializers.BooleanField(source="is_published", read_only=True)
     archivedAt = serializers.DateTimeField(source="archived_at", read_only=True)
+    cadeira = CadeiraField(read_only=True)
 
     class Meta:
         model = Trilha
         fields = (
             "id", "subject", "title", "headline", "year", "semester",
             "nodes", "finalExam", "progress", "isSequential", "isPublished", "archivedAt",
+            "cadeira",
         )
 
     def _computed(self, obj):
@@ -95,12 +99,14 @@ class TrilhaWriteSerializer(serializers.ModelSerializer):
 
     isSequential = serializers.BooleanField(source="is_sequential", required=False)
     finalExamId = serializers.UUIDField(required=False, allow_null=True)
+    # C-K4: id da cadeira (catálogo global) ou null.
+    cadeira = CadeiraField()
 
     class Meta:
         model = Trilha
         fields = (
             "title", "headline", "subject", "year", "semester",
-            "isSequential", "finalExamId",
+            "isSequential", "finalExamId", "cadeira",
         )
 
 

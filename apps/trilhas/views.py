@@ -38,7 +38,7 @@ def _trilhas_for(view):
     )
     return (
         _visible_trilhas(view)
-        .select_related("final_exam")
+        .select_related("final_exam", "cadeira")
         .prefetch_related(Prefetch("items", queryset=items))
     )
 
