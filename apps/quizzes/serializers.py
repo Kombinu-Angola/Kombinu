@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.contents.serializers import CadeiraField
 from .models import Option, Question, Quiz, QuizSubmission
 
 
@@ -25,10 +27,11 @@ class QuizDetailSerializer(serializers.ModelSerializer):
     description = serializers.CharField(source="content.description", read_only=True)
     questions = QuestionSerializer(many=True, read_only=True)
     timeLimit = serializers.SerializerMethodField()
+    cadeira = CadeiraField(read_only=True)
 
     class Meta:
         model = Quiz
-        fields = ("id", "title", "description", "questions", "timeLimit")
+        fields = ("id", "title", "description", "questions", "timeLimit", "cadeira")
 
     def get_timeLimit(self, obj):
         return 15
@@ -61,3 +64,9 @@ class QuizGenerationSerializer(serializers.Serializer):
     number_of_questions = serializers.IntegerField(  # CORRIGIDO: era number_of_question
         min_value=1, max_value=50, required=False, default=10
     )
+
+
+class QuizManualCadeiraSerializer(serializers.Serializer):
+    """`cadeira` opcional na criação manual de um quiz (C-K4)."""
+
+    cadeira = CadeiraField()

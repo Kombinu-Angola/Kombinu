@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
 from .serializers import (
     QuizDetailSerializer,
+    QuizManualCadeiraSerializer,
     QuizSubmissionSerializer,
 )
 from .models import Option, Question, Quiz, QuizAnswer, QuizSubmission
@@ -26,7 +27,7 @@ class _InvalidAnswer(Exception):
 
 
 class QuizDetailView(WorkspaceScopedMixin, generics.RetrieveAPIView):
-    queryset = Quiz.objects.all()
+    queryset = Quiz.objects.select_related("content", "cadeira")
     serializer_class = QuizDetailSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = "id"
@@ -82,11 +83,16 @@ class QuizManualCreationView(WorkspaceScopedMixin, APIView):
         if not questions_data:
             return Response({"error": "No questions provided."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # C-K4: `cadeira` opcional (id ou null), do catálogo global.
+        cadeira_serializer = QuizManualCadeiraSerializer(data=request.data)
+        cadeira_serializer.is_valid(raise_exception=True)
+
         with transaction.atomic():
             quiz = Quiz.objects.create(
                 title=f"Quiz: {content.title}",
                 content=content,
                 organizacao=content.organizacao,
+                cadeira=cadeira_serializer.validated_data.get("cadeira"),
             )
             for q_data in questions_data:
                 q_text = q_data.get("question", "")
