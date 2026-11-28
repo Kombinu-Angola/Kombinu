@@ -227,7 +227,7 @@ backend/
 
 | Rota | Método | Descrição |
 | --- | --- | --- |
-| `/api/auth/register/` | POST | Registo de utilizadores. Obrigatórios: `email`, `password`, `user_type`, `ano_nascimento` (1900 até ao ano actual) e `aceita_termos: true`; opcionais: `first_name`, `last_name` e `marketing_opt_in`. Grava a versão dos termos aceite (3.0) e o estado do consentimento do encarregado: `pendente` se a idade, calculada só pelo ano, for inferior a `IDADE_LIMITE_CONSENTIMENTO` (18), senão `nao_necessario` |
+| `/api/auth/register/` | POST | Registo de utilizadores. Cria sempre uma conta `learner`. Obrigatórios: `email`, `password`, `ano_nascimento` (1900 até ao ano actual) e `aceita_termos: true`; opcionais: `first_name`, `last_name` e `marketing_opt_in`. O `user_type` está obsoleto: continua aceite mas é ignorado, e a promoção a criador faz-se pelo admin. A resposta é `{message, user_id, email, user_type}`. Grava a versão dos termos aceite (3.0) e o estado do consentimento do encarregado: `pendente` se a idade, calculada só pelo ano, for inferior a `IDADE_LIMITE_CONSENTIMENTO` (18), senão `nao_necessario` |
 | `/api/auth/login/` | POST | Login por email — devolve `access_token`, `refresh_token` e `user` (com `memberships` e `must_change_password`) |
 | `/api/auth/institutional/login/` | POST | Login institucional: `{ school_code, student_code, password }` (`school_code` = código de 6 caracteres da escola, não o UUID). Mesmo envelope; qualquer falha → 401 igual |
 | `/api/auth/password/change/` | POST | `{ current_password, new_password }` → novos `access_token`/`refresh_token`; os anteriores deixam de valer |
@@ -324,7 +324,6 @@ curl -X POST https://kombinu.onrender.com/api/auth/register/ \
   -d '{
     "email": "test@example.com",
     "password": "securepassword123",
-    "user_type": "learner",
     "ano_nascimento": 2005,
     "aceita_termos": true
   }'

@@ -30,6 +30,18 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `is_published` e despublicar.
 - Listagem de quizzes: o frontend usa `/api/contents/?cadeira=&has_quiz=true`.
 - Endpoint de candidatura a criador.
+## [Não Lançado] - O registo público deixa de criar criadores (C-K5)
+
+### Segurança
+
+- **`POST /api/auth/register/` passa a criar sempre uma conta `learner`.** Antes, quem se registava com `user_type=creator` ficava logo com acesso ao estúdio e às estatísticas de criador, e podia publicar sem aprovação.
+  - O campo `user_type` continua aceite, para não partir o registo do frontend em produção, mas é ignorado: com `creator`, a resposta é 201 com `user_type: "learner"`.
+  - No schema fica marcado como obsoleto e passa a ser opcional. Um valor fora das escolhas continua a dar 400.
+  - A promoção a criador faz-se só pelo admin do Django. As contas que já eram `creator` não mudam.
+
+### Alterado
+
+- A resposta do registo passa a incluir `user_type` (sempre `"learner"`), além de `message`, `user_id` e `email`.
 
 ---
 
