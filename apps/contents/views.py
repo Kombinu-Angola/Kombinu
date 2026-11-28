@@ -15,7 +15,7 @@ class ContentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     # `creator` e a relação inversa `quiz` (usada por `has_quiz`/`quiz_id`) vêm
     # no mesmo JOIN: sem isto eram 2 a 3 consultas por conteúdo (N+1).
     queryset = (
-        Content.objects.select_related("creator", "quiz").all().order_by('-created_at')
+        Content.objects.select_related("creator", "quiz", "cadeira").all().order_by('-created_at')
     )
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]

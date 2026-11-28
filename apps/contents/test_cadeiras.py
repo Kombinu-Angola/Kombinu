@@ -157,7 +157,8 @@ class CadeiraIsolationTests(APITestCase):
         content = Content.objects.get(title="Direito Constitucional Mkt")
         self.client.force_authenticate(self.autor)
         r = self.client.get(reverse("content-detail", args=[content.pk]))
-        self.assertEqual(r.data["cadeira"], self.direito.pk)
+        # C-K4: a leitura passa a ser o objecto {id, nome, curso}.
+        self.assertEqual(r.data["cadeira"]["id"], self.direito.pk)
         r = self.client.patch(
             reverse("content-detail", args=[content.pk]),
             {"cadeira": self.calculo.pk},
