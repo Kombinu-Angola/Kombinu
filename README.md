@@ -236,11 +236,11 @@ backend/
 | `/api/dashboard/learner/stats/` | GET | Estatísticas do aprendiz |
 | `/api/dashboard/learner/courses/` | GET | Cursos frequentados |
 | `/api/dashboard/creator/stats/` | GET | Estatísticas do criador |
-| `/api/contents/` | GET/POST | Listar e criar conteúdos. Filtros: `category`, `creator`, `cadeira` (id), `has_quiz` e `search`, sempre dentro do `X-Workspace`. Cada conteúdo traz `cadeira` (id ou `null`), que também se pode enviar ao criar ou editar |
+| `/api/contents/` | GET/POST | Listar e criar conteúdos. Filtros: `category`, `creator`, `cadeira` (id), `has_quiz` e `search`, sempre dentro do `X-Workspace`. Cada conteúdo traz `cadeira` como `{id, nome, curso}` ou `null`; ao criar e editar, envia-se o id ou `null` |
 | `/api/contents/{id}/` | GET/PUT/DELETE | Detalhes de um conteúdo |
-| `/api/quizzes/{id}/` | GET | Detalhes de um quiz |
+| `/api/quizzes/{id}/` | GET | Detalhes de um quiz, com `cadeira` (`{id, nome, curso}` ou `null`) |
 | `/api/quizzes/contents/{content_id}/generate-quiz/` | POST | **Desligado:** devolve `410 Gone` até chegar a geração por IA. Usar o `manual-quiz/` |
-| `/api/quizzes/{content_id}/manual/` | POST | Criar quiz manual (creator) |
+| `/api/quizzes/contents/{content_id}/manual-quiz/` | POST | Criar o quiz de um conteúdo à mão (só o autor do conteúdo): `questions` e, opcionalmente, `cadeira` (id ou `null`) |
 | `/api/quizzes/{quiz_id}/submit/` | POST | Submeter respostas — devolve XP ganho |
 | `/api/rankings/global/` | GET | Ranking global com posição do utilizador |
 | `/api/rankings/me/` | GET | XP e ofensiva do próprio utilizador: `xp_total` (carteira global), `xp_workspace` (workspace activo), `level`, `streak` (dias seguidos com XP, em Africa/Luanda, terminando hoje ou ontem), `best_streak` e `last_activity_date`. Respeita o `X-Workspace` |
@@ -250,7 +250,7 @@ backend/
 | `/api/me/` | GET/PATCH | Perfil académico do próprio utilizador (onboarding), criado no primeiro GET; sem id no URL. Também devolve `ano_nascimento`, `marketing_opt_in` e `consentimento_encarregado` (da conta); destes, o PATCH só altera o `marketing_opt_in`. Resposta: `id`, `nome`, `email`, `intent`, `instituicao` (`{id, nome, sigla, provincia}` ou `null`), `instituicao_outra`, `curso`, `ano` (1 a 6), `cadeira_foco` (`{id, nome}` ou `null`), `minutos_por_dia` (5/15/30/60), `provincia` (slug de uma das 21 províncias), `ano_entrada` e `onboarding_completed_at`. No PATCH todos os campos são opcionais, `instituicao` e `cadeira_foco` recebem ids, e `"concluir": true` grava a conclusão (só da primeira vez). Se mudar a `instituicao` sem `provincia` no pedido, a província passa a ser a da instituição |
 | `/api/instituicoes/` | GET | Catálogo de instituições (`id`, `nome`, `sigla`, `provincia`), sem paginação. Preenche-se pelo admin |
 | `/api/cadeiras/` | GET | Catálogo global de cadeiras (`id`, `nome`, `curso`), igual em todos os workspaces e sem paginação. Filtro `?curso=` (sem diferenciar maiúsculas). Preenche-se pelo admin |
-| `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. DELETE → 409 se algum aluno já tem progresso |
+| `/api/trilhas/{id}/` | GET/PATCH/DELETE | Detalhe; editar e apagar só pelo criador. A trilha traz `cadeira` (`{id, nome, curso}` ou `null`); ao criar e editar, envia-se o id ou `null`. DELETE → 409 se algum aluno já tem progresso |
 | `/api/trilhas/{id}/publish/` | POST | Publicar (exige pelo menos um passo) |
 | `/api/trilhas/{id}/archive/` · `/unarchive/` | POST | Arquivar ou desarquivar (criador). Arquivada, sai das listagens dos alunos; o progresso mantém-se |
 | `/api/trilhas/{id}/items/` | POST | Acrescentar um passo `{ kind, targetId, titleOverride?, summary?, minutes?, xpReward? }`; o alvo tem de ser do mesmo workspace da trilha |

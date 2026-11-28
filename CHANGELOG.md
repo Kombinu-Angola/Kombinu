@@ -5,6 +5,31 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não Lançado] - Cadeira exposta na API (C-K4)
+
+### Adicionado
+
+- **`cadeira` nos serializers de conteúdos, quizzes e trilhas.** Até aqui, a FK do K2 só se lia e gravava pelo admin do Django.
+  - **Leitura:** `cadeira: {id, nome, curso} | null` em:
+    - `GET /api/contents/` e `GET /api/contents/{id}/`;
+    - `GET /api/quizzes/{id}/`;
+    - `GET /api/trilhas/` e `GET /api/trilhas/{id}/`.
+    
+    Usa `select_related`, por isso o número de consultas da listagem de conteúdos não muda.
+  - **Escrita:** o id da cadeira, ou `null`, na criação e edição de conteúdos, na criação manual de quizzes (`manual-quiz/`) e na criação e edição de trilhas. Só pode escrever quem já podia editar esse recurso.
+  - **Erros:** um id inexistente dá 400 ("Cadeira não encontrada.").
+  - A cadeira é um catálogo global, por isso não tem validação de workspace. O filtro `?cadeira=` continua a respeitar o contexto activo.
+  - Não há migration.
+
+### Alterado
+
+- **Nos conteúdos, `cadeira` deixa de ser só o id e passa a ser o objecto `{id, nome, curso}`.** Desde o K2 a resposta trazia o id por causa de `fields="__all__"`. A escrita continua a ser por id. Nos serviços do frontend, nada lia o campo antigo.
+
+### Fora do âmbito
+
+- `is_published` e despublicar.
+- Listagem de quizzes: o frontend usa `/api/contents/?cadeira=&has_quiz=true`.
+- Endpoint de candidatura a criador.
 ## [Não Lançado] - O registo público deixa de criar criadores (C-K5)
 
 ### Segurança
